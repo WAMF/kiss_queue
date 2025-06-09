@@ -51,36 +51,38 @@ class InMemoryQueue<T> implements Queue<T> {
     _cleanupExpiredMessages();
     _restoreVisibleMessages();
 
-    // Find first visible message
-    final message = _queue.firstWhereOrNull(_isMessageVisible);
-    if (message == null) {
-      return null;
-    }
-
-    // Increment receive count
-    _receiveCount[message.id] = (_receiveCount[message.id] ?? 0) + 1;
-
-    // Check if message should go to dead letter queue
-    if (_receiveCount[message.id]! > configuration.maxReceiveCount) {
-      if (deadLetterQueue != null) {
-        await _moveToDeadLetterQueue(message);
-      } else {
-        // No dead letter queue - just remove the message permanently
-        _queue.removeWhere((element) => element.id == message.id);
-        _cleanupMessageTracking(message.id);
+    while (true) {
+      // Find first visible message
+      final message = _queue.firstWhereOrNull(_isMessageVisible);
+      if (message == null) {
+        return null;
       }
-      return dequeue(); // Try to get next available message
+
+      // Increment receive count
+      _receiveCount[message.id] = (_receiveCount[message.id] ?? 0) + 1;
+
+      // Check if message should go to dead letter queue
+      if (_receiveCount[message.id]! > configuration.maxReceiveCount) {
+        if (deadLetterQueue != null) {
+          await _moveToDeadLetterQueue(message);
+        } else {
+          // No dead letter queue - just remove the message permanently
+          _queue.removeWhere((element) => element.id == message.id);
+          _cleanupMessageTracking(message.id);
+        }
+        continue; // Try to get next available message
+      }
+
+      // Make message invisible for visibility timeout
+      _invisibleUntil[message.id] = DateTime.now().add(
+        configuration.visibilityTimeout,
+      );
+
+      // Create processed copy with timestamp
+      final processedMessage = message.copyWith(processedAt: DateTime.now());
+
+      return processedMessage;
     }
-
-    // Make message invisible for visibility timeout
-    _invisibleUntil[message.id] = DateTime.now().add(
-      configuration.visibilityTimeout,
-    );
-
-    // Create processed copy with timestamp
-    final processedMessage = message.copyWith(processedAt: DateTime.now());
-
-    return processedMessage;
   }
 
   @override
@@ -183,7 +185,7 @@ class InMemoryQueue<T> implements Queue<T> {
 }
 
 /// Factory for creating in-memory queues with proper lifecycle management
-class InMemoryEventQueueFactory implements QueueFactory {
+class InMemoryQueueFactory implements QueueFactory {
   // Track created queues for proper cleanup and retrieval
   final Map<String, Queue> _createdQueues = <String, Queue>{};
 
@@ -233,10 +235,4 @@ class InMemoryEventQueueFactory implements QueueFactory {
     }
     _createdQueues.clear();
   }
-
-  /// Get count of created queues (useful for testing/monitoring)
-  int get createdQueueCount => _createdQueues.length;
-
-  /// Get list of queue names (useful for testing/monitoring)
-  List<String> get queueNames => _createdQueues.keys.toList();
 }

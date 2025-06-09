@@ -1,25 +1,8 @@
 import 'package:kiss_queue/kiss_queue.dart';
 import 'package:test/test.dart';
 import 'dart:async';
+import 'benchmark_models.dart';
 import 'queue_test_suite.dart'; // Import our test config
-
-// Sample data for performance testing
-class BenchmarkMessage {
-  final String id;
-  final String data;
-  final DateTime timestamp;
-  final Map<String, dynamic> metadata;
-
-  BenchmarkMessage({
-    required this.id,
-    required this.data,
-    required this.timestamp,
-    required this.metadata,
-  });
-
-  @override
-  String toString() => 'BenchmarkMessage($id, ${data.length} bytes)';
-}
 
 /// Generic performance test suite that can benchmark any EventQueue implementation
 void runPerformanceTests({
@@ -160,12 +143,26 @@ void runPerformanceTests({
       // Phase 2: Bulk process (dequeue + acknowledge)
       final processStart = DateTime.now();
       int processedCount = 0;
+      int nullCount = 0;
+      const maxNullAttempts = 100; // Safety limit
 
       while (processedCount < messageCount) {
         final msg = await queue.dequeue();
         if (msg != null) {
           await queue.acknowledge(msg.id);
           processedCount++;
+          nullCount = 0; // Reset null counter on successful dequeue
+        } else {
+          nullCount++;
+          if (nullCount > maxNullAttempts) {
+            print(
+              'Warning: Stopping bulk process early due to $nullCount consecutive null dequeues',
+            );
+            print('Processed $processedCount out of $messageCount messages');
+            break;
+          }
+          // Small delay to avoid tight loop
+          await Future.delayed(const Duration(milliseconds: 1));
         }
       }
 

@@ -1,31 +1,14 @@
 import 'package:kiss_queue/kiss_queue.dart';
 import 'package:test/test.dart';
 import 'dart:async';
-
-// Sample data for performance testing
-class BenchmarkMessage {
-  final String id;
-  final String data;
-  final DateTime timestamp;
-  final Map<String, dynamic> metadata;
-
-  BenchmarkMessage({
-    required this.id,
-    required this.data,
-    required this.timestamp,
-    required this.metadata,
-  });
-
-  @override
-  String toString() => 'BenchmarkMessage($id, ${data.length} bytes)';
-}
+import 'benchmark_models.dart';
 
 void main() {
   group('Kiss Queue Performance Benchmarks', () {
-    late InMemoryEventQueueFactory factory;
+    late InMemoryQueueFactory factory;
 
     setUp(() {
-      factory = InMemoryEventQueueFactory();
+      factory = InMemoryQueueFactory();
     });
 
     tearDown(() {

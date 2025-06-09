@@ -4,7 +4,7 @@ A simple, backend-agnostic queue interface for Dart — part of the [KISS](https
 
 ## 🎯 Purpose
 
-`kiss_queue` provides a unified, async queue interface that works with any backend. Whether you're building with in-memory queues for development, planning to use AWS SQS for production, or implementing custom database-backed queues, this library gives you a consistent API with enterprise-grade features.
+`kiss_queue` provides a unified, async queue interface that works with any backend. Whether you're building with in-memory queues for development, cloud-scale message queuing for production, or implementing custom database-backed queues, this library gives you a consistent API with enterprise-grade features.
 
 Just queues. No ceremony. No complexity.
 
@@ -152,7 +152,7 @@ final queue = await factory.createQueue<MyData>('my-queue');
 
 The generic interface makes it easy to implement queues for any backend:
 
-- **AWS SQS**: Cloud-scale message queuing
+- **Cloud Providers**: Cloud-scale message queuing
 - **Google Cloud Pub/Sub**: Global message distribution  
 - **Redis**: High-performance in-memory queuing
 - **PostgreSQL/MySQL**: Database-backed persistence
@@ -161,34 +161,32 @@ The generic interface makes it easy to implement queues for any backend:
 
 ## 🧪 Testing Your Implementation
 
-`kiss_queue` includes a comprehensive test suite that can validate any implementation:
+`kiss_queue` includes a comprehensive test suite that can validate any implementation with just one line of code:
 
 ```dart
 // test/my_implementation_test.dart
 import 'package:kiss_queue/kiss_queue.dart';
-import 'queue_test_suite.dart';
-import 'performance_test_suite.dart';
+import 'implementation_tester.dart';
 
 void main() {
-  // Test your implementation with the same comprehensive suite
-  runQueueTests<Queue<Order>>(
-    implementationName: 'My Custom Queue',
-    createQueue: createMyQueue<Order>,
-    cleanup: cleanupMyQueue,
-    config: QueueTestConfig.cloud, // Adjust expectations for your backend
-  );
+  final factory = MyCustomQueueFactory();
+  final tester = ImplementationTester('MyCustomQueue', factory, () {
+    factory.disposeAll(); // Your cleanup logic
+  });
   
-  runPerformanceTests(
-    implementationName: 'My Custom Queue', 
-    createOrderQueue: createMyQueue<Order>,
-    createBenchmarkQueue: createMyQueue<BenchmarkMessage>,
-    cleanup: cleanupMyQueue,
-    config: QueueTestConfig.cloud,
-  );
+  tester.run(); // That's it! 25+ comprehensive tests will run
 }
 ```
 
-**Test Coverage**: 21 tests covering functionality, performance, concurrency, and edge cases.
+**Test Coverage**: 25+ tests covering functionality, performance, concurrency, and edge cases.
+
+### Steps to Test Your Implementation
+
+1. **Implement your QueueFactory** (with your custom Queue implementation)
+2. **Create a test file** with `ImplementationTester`
+3. **Run**: `dart test my_implementation_test.dart`
+
+That's it! The `ImplementationTester` automatically runs both functional and performance tests with appropriate configurations.
 
 ## ⚙️ Configuration
 
@@ -200,9 +198,6 @@ QueueConfiguration.inMemory
 
 // Balanced (cloud services)  
 QueueConfiguration.cloud
-
-// Conservative (AWS SQS)
-QueueConfiguration.aws
 
 // High throughput (production)
 QueueConfiguration.highThroughput
@@ -315,7 +310,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🌟 Why kiss_queue?
 
 - **Simple**: Minimal API surface, easy to understand
-- **Reliable**: Battle-tested patterns from AWS SQS  
+- **Reliable**: Battle-tested patterns from cloud message queuing services  
 - **Flexible**: Works with any backend via clean interface
 - **Performant**: Optimized for high throughput and low latency
 - **Testable**: Comprehensive test suite included

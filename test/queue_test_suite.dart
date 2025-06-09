@@ -82,14 +82,15 @@ class QueueTestConfig {
     performanceTestMessageCount: 100,
   );
 
-  static const aws = QueueTestConfig(
+  static const conservative = QueueTestConfig(
     enqueueTimeoutMs: 15000,
     dequeueTimeoutMs: 15000,
     acknowledgeTimeoutMs: 15000,
     loadTestMessageCount: 1000,
     loadTestTimeoutMs: 90000,
-    maxAverageLatencyUs: 1000000, // 1s - AWS SQS latency
-    maxP95LatencyUs: 5000000, // 5s - AWS P95
+    maxAverageLatencyUs:
+        1000000, // 1s - Conservative latency for remote services
+    maxP95LatencyUs: 5000000, // 5s - Conservative P95
     concurrentMessageCount: 50,
     performanceTestMessageCount: 50,
   );
@@ -106,19 +107,24 @@ typedef QueueFactoryFunction<T> =
 // Generic cleanup function type
 typedef QueueCleanup = void Function();
 
-/// Generic test suite that can test any EventQueue implementation
+// Generic factory function type for creating factory instances
+typedef QueueFactoryProvider = QueueFactory Function();
+
+/// Generic test suite that can test any Queue implementation
 void runQueueTests<T extends Queue<Order>>({
   required String implementationName,
   required QueueFactoryFunction<Order> createQueue,
   required QueueCleanup cleanup,
   required QueueTestConfig config,
+  QueueFactoryProvider?
+  factoryProvider, // Optional for testing factory functionality
 }) {
   group('$implementationName - Order Processing System', () {
     tearDown(() {
       cleanup();
     });
 
-    test('should demonstrate simplified EventQueueMessage API', () async {
+    test('should demonstrate simplified QueueMessage API', () async {
       // Arrange
       final orderQueue = await createQueue('test-simple-api');
       final order = Order(
@@ -140,7 +146,7 @@ void runQueueTests<T extends Queue<Order>>({
       expect(dequeuedMessage.processedAt, isNotNull);
 
       // Test toString method
-      expect(dequeuedMessage.toString(), contains('EventQueueMessage'));
+      expect(dequeuedMessage.toString(), contains('QueueMessage'));
       expect(dequeuedMessage.toString(), contains(dequeuedMessage.id));
     });
 
@@ -556,4 +562,109 @@ void runQueueTests<T extends Queue<Order>>({
       expect(message1.hashCode, isNot(equals(message3.hashCode)));
     });
   });
+
+  // Generic factory tests (if factory provider available)
+  if (factoryProvider != null) {
+    group('$implementationName - Queue Factory', () {
+      late QueueFactory factory;
+
+      setUp(() {
+        factory = factoryProvider();
+      });
+
+      tearDown(() {
+        cleanup();
+      });
+
+      test('should create and retrieve queues', () async {
+        // Act - Create queue
+        final queue1 = await factory.createQueue<String>('factory-test-1');
+        final queue2 = await factory.getQueue<String>('factory-test-1');
+
+        // Assert - Should get same queue instance
+        expect(queue1, same(queue2));
+      });
+
+      test('should prevent duplicate queue creation', () async {
+        // Arrange
+        await factory.createQueue<String>('duplicate-test');
+
+        // Act & Assert
+        expect(
+          () => factory.createQueue<String>('duplicate-test'),
+          throwsA(isA<QueueAlreadyExistsError>()),
+        );
+      });
+
+      test('should handle non-existent queue retrieval', () async {
+        // Act & Assert
+        expect(
+          () => factory.getQueue<String>('non-existent-factory-test'),
+          throwsA(isA<QueueDoesNotExistError>()),
+        );
+      });
+
+      test('should delete queues properly', () async {
+        // Arrange
+        await factory.createQueue<String>('delete-test');
+
+        // Act
+        await factory.deleteQueue('delete-test');
+
+        // Assert - Should not be able to retrieve deleted queue
+        expect(
+          () => factory.getQueue<String>('delete-test'),
+          throwsA(isA<QueueDoesNotExistError>()),
+        );
+      });
+
+      test('should handle deleting non-existent queue', () async {
+        // Act & Assert
+        expect(
+          () => factory.deleteQueue('non-existent-delete-test'),
+          throwsA(isA<QueueDoesNotExistError>()),
+        );
+      });
+
+      test('should support different queue configurations', () async {
+        // Arrange & Act - Create queues with different configurations
+        final defaultQueue = await factory.createQueue<Order>('config-default');
+        final highThroughputQueue = await factory.createQueue<Order>(
+          'config-high-throughput',
+          configuration: QueueConfiguration.highThroughput,
+        );
+        final customQueue = await factory.createQueue<Order>(
+          'config-custom',
+          configuration: const QueueConfiguration(
+            maxReceiveCount: 10,
+            visibilityTimeout: Duration(minutes: 5),
+            messageRetentionPeriod: Duration(hours: 24),
+          ),
+        );
+
+        // Assert - Check configurations are applied correctly
+        expect(defaultQueue.configuration.maxReceiveCount, equals(3));
+        expect(
+          defaultQueue.configuration.visibilityTimeout,
+          equals(Duration(seconds: 30)),
+        );
+
+        expect(highThroughputQueue.configuration.maxReceiveCount, equals(5));
+        expect(
+          highThroughputQueue.configuration.visibilityTimeout,
+          equals(Duration(minutes: 2)),
+        );
+
+        expect(customQueue.configuration.maxReceiveCount, equals(10));
+        expect(
+          customQueue.configuration.visibilityTimeout,
+          equals(Duration(minutes: 5)),
+        );
+        expect(
+          customQueue.configuration.messageRetentionPeriod,
+          equals(Duration(hours: 24)),
+        );
+      });
+    });
+  }
 }

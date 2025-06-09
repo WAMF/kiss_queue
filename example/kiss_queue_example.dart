@@ -2,7 +2,7 @@ import 'package:kiss_queue/kiss_queue.dart';
 
 void main() async {
   // Create factory for managing queues
-  final factory = InMemoryEventQueueFactory();
+  final factory = InMemoryQueueFactory();
 
   print('=== Demonstrating Queue-Level Custom ID Generation ===\n');
 

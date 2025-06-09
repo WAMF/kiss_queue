@@ -48,7 +48,7 @@ class QueueMessage<T> {
 
   @override
   String toString() {
-    return 'EventQueueMessage(id: $id, payload: $payload, createdAt: $createdAt)';
+    return 'QueueMessage(id: $id, payload: $payload, createdAt: $createdAt)';
   }
 
   @override
