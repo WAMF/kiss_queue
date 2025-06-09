@@ -1,0 +1,16 @@
+name: kiss_queue
+description: A simple, backend-agnostic queue interface for Dart
+version: 0.0.1
+repository: https://github.com/WAMF/kiss_queue
+
+environment:
+  sdk: ^3.8.0
+
+
+dependencies:
+  collection: ^1.19.1
+  uuid: ^4.5.1
+
+dev_dependencies:
+  lints: ^5.0.0
+  test: ^1.24.0
