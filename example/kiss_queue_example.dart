@@ -8,7 +8,7 @@ void main() async {
 
   // Create a queue with a custom ID generator configured at the queue level
   int messageCounter = 1000;
-  final queueWithCustomIds = await factory.createQueue<String>(
+  final queueWithCustomIds = await factory.createQueue<String, String>(
     'custom-id-queue',
     configuration: QueueConfiguration.defaultConfig,
     idGenerator: () => 'MSG-${messageCounter++}',
@@ -21,7 +21,7 @@ void main() async {
   print('=== Demonstrating Multiple ID Generation Methods ===\n');
 
   // Create a standard queue (uses UUID by default)
-  final standardQueue = await factory.createQueue<String>(
+  final standardQueue = await factory.createQueue<String, String>(
     'standard-queue',
     configuration: QueueConfiguration.defaultConfig,
   );

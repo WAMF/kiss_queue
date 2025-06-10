@@ -131,18 +131,18 @@ class DeserializationError extends Error {
 }
 
 /// Queue interface with SQS-like reliability features built-in
-abstract class Queue<T> {
+abstract class Queue<T, S> {
   /// Queue configuration (visibility timeout, max retries, etc.)
   QueueConfiguration get configuration;
 
   /// Optional dead letter queue for poison messages
-  Queue<T>? get deadLetterQueue;
+  Queue<T, S>? get deadLetterQueue;
 
   /// Optional custom ID generator function
   String Function()? get idGenerator;
 
   /// Serializer for converting payload objects to/from storage format
-  MessageSerializer<T, Object?>? get serializer;
+  MessageSerializer<T, S>? get serializer;
 
   /// Enqueue a message
   Future<void> enqueue(QueueMessage<T> message);
@@ -176,15 +176,15 @@ class QueueDoesNotExistError extends Error {
 }
 
 abstract class QueueFactory {
-  Future<Queue<T>> createQueue<T>(
+  Future<Queue<T, S>> createQueue<T, S>(
     String queueName, {
     QueueConfiguration? configuration,
-    Queue<T>? deadLetterQueue,
+    Queue<T, S>? deadLetterQueue,
     String Function()? idGenerator,
-    MessageSerializer<T, Object?>? serializer,
+    MessageSerializer<T, S>? serializer,
   });
 
   Future<void> deleteQueue(String queueName);
 
-  Future<Queue<T>> getQueue<T>(String queueName);
+  Future<Queue<T, S>> getQueue<T, S>(String queueName);
 }

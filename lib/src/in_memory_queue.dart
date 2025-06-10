@@ -2,20 +2,20 @@ import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:kiss_queue/kiss_queue.dart';
 
-class InMemoryQueue<T> implements Queue<T> {
-  final List<QueueMessage<Object?>> _queue = [];
+class InMemoryQueue<T, S> implements Queue<T, S> {
+  final List<QueueMessage<S>> _queue = [];
 
   @override
   final QueueConfiguration configuration;
 
   @override
-  final Queue<T>? deadLetterQueue;
+  final Queue<T, S>? deadLetterQueue;
 
   @override
   final String Function()? idGenerator;
 
   @override
-  final MessageSerializer<T, Object?>? serializer;
+  final MessageSerializer<T, S>? serializer;
 
   // Track message visibility and receive counts
   final Map<String, DateTime> _invisibleUntil = {};
@@ -41,12 +41,12 @@ class InMemoryQueue<T> implements Queue<T> {
       return;
     }
 
-    final QueueMessage<Object?> storedMessage;
+    final QueueMessage<S> storedMessage;
     if (serializer != null) {
       // Serialize only the payload for storage
       try {
         final serializedPayload = serializer!.serialize(message.payload);
-        storedMessage = QueueMessage<Object?>(
+        storedMessage = QueueMessage<S>(
           id: message.id,
           payload: serializedPayload,
           createdAt: message.createdAt,
@@ -56,14 +56,19 @@ class InMemoryQueue<T> implements Queue<T> {
       } catch (e) {
         throw SerializationError('Failed to serialize message payload', e);
       }
-    } else {
+    } else if (message.payload is S) {
       // Store the original payload as-is
-      storedMessage = QueueMessage<Object?>(
+      storedMessage = QueueMessage<S>(
         id: message.id,
-        payload: message.payload,
+        payload: message.payload as S,
         createdAt: message.createdAt,
         processedAt: message.processedAt,
         acknowledgedAt: message.acknowledgedAt,
+      );
+    } else {
+      throw SerializationError(
+        'Message payload type ${message.payload.runtimeType} does not match expected type $S',
+        message.payload,
       );
     }
 
@@ -164,7 +169,7 @@ class InMemoryQueue<T> implements Queue<T> {
 
   // Private helper methods
 
-  T _deserializePayload(QueueMessage<Object?> storedMessage) {
+  T _deserializePayload(QueueMessage<S> storedMessage) {
     if (serializer != null) {
       try {
         return serializer!.deserialize(storedMessage.payload!);
@@ -229,9 +234,7 @@ class InMemoryQueue<T> implements Queue<T> {
     });
   }
 
-  Future<void> _moveToDeadLetterQueue(
-    QueueMessage<Object?> storedMessage,
-  ) async {
+  Future<void> _moveToDeadLetterQueue(QueueMessage<S> storedMessage) async {
     _queue.removeWhere((element) => element.id == storedMessage.id);
     _cleanupMessageTracking(storedMessage.id);
 
@@ -256,13 +259,13 @@ class InMemoryQueue<T> implements Queue<T> {
     _receiveCount.remove(messageId);
   }
 
-  QueueMessage<Object?> _removeMessage(String messageId) {
+  QueueMessage<S> _removeMessage(String messageId) {
     final message = _getMessage(messageId);
     _queue.removeWhere((element) => element.id == messageId);
     return message;
   }
 
-  QueueMessage<Object?> _getMessage(String messageId) {
+  QueueMessage<S> _getMessage(String messageId) {
     final message = _queue.firstWhereOrNull(
       (element) => element.id == messageId,
     );
@@ -279,18 +282,18 @@ class InMemoryQueueFactory implements QueueFactory {
   final Map<String, Queue> _createdQueues = <String, Queue>{};
 
   @override
-  Future<Queue<T>> createQueue<T>(
+  Future<Queue<T, S>> createQueue<T, S>(
     String queueName, {
     QueueConfiguration? configuration,
-    Queue<T>? deadLetterQueue,
+    Queue<T, S>? deadLetterQueue,
     String Function()? idGenerator,
-    MessageSerializer<T, Object?>? serializer,
+    MessageSerializer<T, S>? serializer,
   }) async {
     if (_createdQueues.containsKey(queueName)) {
       throw QueueAlreadyExistsError(queueName);
     }
 
-    final queue = InMemoryQueue<T>._(
+    final queue = InMemoryQueue<T, S>._(
       configuration: configuration,
       deadLetterQueue: deadLetterQueue,
       idGenerator: idGenerator,
@@ -302,12 +305,12 @@ class InMemoryQueueFactory implements QueueFactory {
   }
 
   @override
-  Future<Queue<T>> getQueue<T>(String queueName) async {
+  Future<Queue<T, S>> getQueue<T, S>(String queueName) async {
     final queue = _createdQueues[queueName];
     if (queue == null) {
       throw QueueDoesNotExistError(queueName);
     }
-    return queue as Queue<T>;
+    return queue as Queue<T, S>;
   }
 
   @override

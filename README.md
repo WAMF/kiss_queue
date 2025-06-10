@@ -14,6 +14,7 @@ Just queues. No ceremony. No complexity.
 
 - 🔄 **Backend Agnostic**: Unified interface works with any queue implementation
 - ⚡ **Production Ready**: Visibility timeouts, dead letter queues, message expiration
+- 🔌 **Serialization Support**: Pluggable serialization for any data format (JSON, Binary, etc.)
 - 🧪 **Comprehensive Testing**: Built-in test suite for validating any implementation  
 - 📊 **Enterprise Ready**: Dead letter queues, visibility timeouts, message expiration
 - 🚀 **High Performance**: Optimized interface for maximum throughput
@@ -33,10 +34,11 @@ void main() async {
   final factory = InMemoryQueueFactory();
   
   // Create a queue
-  final queue = await factory.createQueue<String>('my-queue');
+  final queue = await factory.createQueue<String, String>('my-queue');
   
-  // Enqueue a message
+  // Enqueue a message (two equivalent ways)
   await queue.enqueue(QueueMessage.create('Hello, World!'));
+  await queue.enqueuePayload('Hello, simplified!'); // Shorthand
   
   // Dequeue and process
   final message = await queue.dequeue();
@@ -46,6 +48,57 @@ void main() async {
   }
   
   // Cleanup
+  factory.disposeAll();
+}
+```
+
+### Serialization Example
+
+```dart
+import 'dart:convert';
+import 'package:kiss_queue/kiss_queue.dart';
+
+class Order {
+  final String orderId;
+  final double amount;
+  Order(this.orderId, this.amount);
+  
+  // Serialization methods
+  Map<String, dynamic> toJson() => {'orderId': orderId, 'amount': amount};
+  static Order fromJson(Map<String, dynamic> json) => 
+      Order(json['orderId'], json['amount']);
+}
+
+// Custom JSON serializer
+class OrderJsonSerializer implements MessageSerializer<Order, String> {
+  @override
+  String serialize(Order payload) => jsonEncode(payload.toJson());
+  
+  @override
+  Order deserialize(String data) => Order.fromJson(jsonDecode(data));
+}
+
+void main() async {
+  final factory = InMemoryQueueFactory();
+  
+  // Create queue with serialization
+  final queue = await factory.createQueue<Order, String>(
+    'order-queue',
+    serializer: OrderJsonSerializer(),
+  );
+  
+  // Both methods work with serialization
+  final order = Order('ORD-123', 99.99);
+  await queue.enqueuePayload(order);              // Serializes automatically
+  await queue.enqueue(QueueMessage.create(order)); // Also serializes
+  
+  // Dequeue automatically deserializes
+  final message = await queue.dequeue();
+  if (message != null) {
+    print('Order: ${message.payload.orderId}'); // Fully typed Order object
+    await queue.acknowledge(message.id);
+  }
+  
   factory.disposeAll();
 }
 ```
@@ -66,8 +119,8 @@ void main() async {
   final factory = InMemoryQueueFactory();
   
   // Create main queue with dead letter queue for failed messages
-  final deadLetterQueue = await factory.createQueue<Order>('failed-orders');
-  final orderQueue = await factory.createQueue<Order>(
+  final deadLetterQueue = await factory.createQueue<Order, Order>('failed-orders');
+  final orderQueue = await factory.createQueue<Order, Order>(
     'orders',
     configuration: QueueConfiguration.highThroughput,
     deadLetterQueue: deadLetterQueue,
@@ -75,7 +128,7 @@ void main() async {
   
   // Enqueue an order
   final order = Order('ORD-123', 99.99);
-  await orderQueue.enqueue(QueueMessage.create(order));
+  await orderQueue.enqueuePayload(order); // Simple payload enqueue
   
   // Process with error handling
   final message = await orderQueue.dequeue();
@@ -106,13 +159,15 @@ Future<void> processOrder(Order order) async {
 ### Core Interface
 
 ```dart
-abstract class Queue<T> {
+abstract class Queue<T, S> {
   // Queue configuration and dead letter queue  
   QueueConfiguration get configuration;
-  Queue<T>? get deadLetterQueue;
+  Queue<T, S>? get deadLetterQueue;
+  MessageSerializer<T, S>? get serializer;
   
   // Core operations
   Future<void> enqueue(QueueMessage<T> message);
+  Future<void> enqueuePayload(T payload);           // Shorthand helper
   Future<QueueMessage<T>?> dequeue();
   Future<void> acknowledge(String messageId);
   Future<QueueMessage<T>?> reject(String messageId, {bool requeue = true});
@@ -122,10 +177,22 @@ abstract class Queue<T> {
 }
 ```
 
+### Serialization Interface
+
+```dart
+abstract class MessageSerializer<T, S> {
+  /// Serialize payload to storage format
+  S serialize(T payload);
+  
+  /// Deserialize from storage format back to payload
+  T deserialize(S data);
+}
+```
+
 ### Message Lifecycle
 
-1. **Enqueue**: Add message to queue
-2. **Dequeue**: Retrieve message (becomes invisible to other consumers)  
+1. **Enqueue**: Add message to queue (with optional serialization)
+2. **Dequeue**: Retrieve message (becomes invisible to other consumers, with optional deserialization)  
 3. **Process**: Handle the message in your application
 4. **Acknowledge**: Mark message as successfully processed (removes from queue)
 5. **Reject**: Mark message as failed (can requeue for retry or move to DLQ)
@@ -136,6 +203,87 @@ abstract class Queue<T> {
 - **Dead Letter Queue**: Failed messages move to DLQ after max retry attempts
 - **Message Expiration**: Optional TTL for automatic message cleanup
 - **Receive Count Tracking**: Monitor how many times a message has been processed
+- **Serialization Support**: Automatic serialization/deserialization with pluggable serializers
+
+## 🔌 Serialization
+
+### Built-in Serialization Patterns
+
+The queue supports flexible serialization through the `MessageSerializer<T, S>` interface, where:
+- `T` is your payload type (e.g., `Order`, `User`)
+- `S` is the storage format (e.g., `String`, `Map<String, dynamic>`, `List<int>`)
+
+### Common Serialization Examples
+
+#### JSON String Serialization
+```dart
+class JsonStringSerializer<T> implements MessageSerializer<T, String> {
+  final T Function(Map<String, dynamic>) fromJson;
+  final Map<String, dynamic> Function(T) toJson;
+  
+  JsonStringSerializer({required this.fromJson, required this.toJson});
+  
+  @override
+  String serialize(T payload) => jsonEncode(toJson(payload));
+  
+  @override
+  T deserialize(String data) => fromJson(jsonDecode(data));
+}
+
+// Usage
+final queue = await factory.createQueue<Order, String>(
+  'orders',
+  serializer: JsonStringSerializer<Order>(
+    fromJson: Order.fromJson,
+    toJson: (order) => order.toJson(),
+  ),
+);
+```
+
+#### Binary Serialization
+```dart
+class BinarySerializer<T> implements MessageSerializer<T, List<int>> {
+  final JsonStringSerializer<T> _jsonSerializer;
+  
+  BinarySerializer(this._jsonSerializer);
+  
+  @override
+  List<int> serialize(T payload) {
+    final jsonString = _jsonSerializer.serialize(payload);
+    return utf8.encode(jsonString);
+  }
+  
+  @override
+  T deserialize(List<int> data) {
+    final jsonString = utf8.decode(data);
+    return _jsonSerializer.deserialize(jsonString);
+  }
+}
+```
+
+#### No Serialization (Direct Storage)
+```dart
+// When T == S, no serializer is needed
+final queue = await factory.createQueue<String, String>('simple-queue');
+await queue.enqueuePayload('Direct string storage');
+```
+
+### Serialization Error Handling
+
+```dart
+try {
+  await queue.enqueuePayload(complexObject);
+} on SerializationError catch (e) {
+  print('Failed to serialize: ${e.message}');
+}
+
+try {
+  final message = await queue.dequeue();
+} on DeserializationError catch (e) {
+  print('Failed to deserialize: ${e.message}');
+  print('Raw data: ${e.data}');
+}
+```
 
 ## 📦 Implementations
 
@@ -145,17 +293,20 @@ Perfect for development, testing, and single-instance applications:
 
 ```dart
 final factory = InMemoryQueueFactory();
-final queue = await factory.createQueue<MyData>('my-queue');
+final queue = await factory.createQueue<MyData, String>(
+  'my-queue',
+  serializer: MySerializer(),
+);
 ```
 
 ### Custom Implementations
 
 The generic interface makes it easy to implement queues for any backend:
 
-- **Cloud Providers**: Cloud-scale message queuing
+- **Cloud Providers**: Cloud-scale message queuing with built-in serialization
 - **Google Cloud Pub/Sub**: Global message distribution  
 - **Redis**: High-performance in-memory queuing
-- **PostgreSQL/MySQL**: Database-backed persistence
+- **PostgreSQL/MySQL**: Database-backed persistence with JSON/binary serialization
 - **Apache Kafka**: High-throughput event streaming
 - **RabbitMQ**: Feature-rich message broker
 
@@ -174,11 +325,20 @@ void main() {
     factory.disposeAll(); // Your cleanup logic
   });
   
-  tester.run(); // That's it! 25+ comprehensive tests will run
+  tester.run(); // That's it! 87 comprehensive tests will run
 }
 ```
 
-**Test Coverage**: 25+ tests covering functionality, performance, concurrency, and edge cases.
+**Test Coverage**: 87 tests covering functionality, serialization, performance, concurrency, and edge cases.
+
+### Comprehensive Test Coverage
+
+- ✅ **Core functionality** (`enqueue`, `enqueuePayload`, `dequeue`, acknowledge, reject)
+- ✅ **Serialization testing** (JSON, binary, Map serializers + error handling)
+- ✅ **Performance benchmarks** (throughput, latency, concurrency)
+- ✅ **Edge cases** (timeouts, retries, dead letters, non-existent messages)
+- ✅ **Factory management** (create, get, delete queues)
+- ✅ **Queue equivalence** (both enqueue methods produce identical results)
 
 ### Steps to Test Your Implementation
 
@@ -224,6 +384,7 @@ The `kiss_queue` interface is designed for high-performance implementations:
 - ✅ Multiple consumer support  
 - ✅ Async-first design for scalability
 - ✅ Minimal overhead interface
+- ✅ Optional serialization (no overhead when T == S)
 
 ## 🛠️ Installation
 
@@ -239,7 +400,7 @@ Then run:
 dart pub get
 ```
 
-## 📚 API Reference
+## �� API Reference
 
 ### QueueMessage
 
@@ -257,12 +418,29 @@ QueueMessage(payload: data, id: customId, createdAt: timestamp)
 QueueMessage.withId(id: 'custom-123', payload: data)
 ```
 
+### Queue Operations
+
+```dart
+// Enqueue with full QueueMessage control
+await queue.enqueue(QueueMessage.create(payload));
+await queue.enqueue(QueueMessage.withId(id: 'custom-id', payload: payload));
+
+// Enqueue payload directly (uses queue's configured idGenerator)
+await queue.enqueuePayload(payload);
+
+// Both methods are equivalent and work with serialization
+```
+
 #### Custom ID Generation Examples
 
 ```dart
 // Sequential counter
 int messageCounter = 1000;
-QueueMessage.create(data, idGenerator: () => 'MSG-${messageCounter++}')
+final queue = await factory.createQueue<Order, String>(
+  'orders',
+  idGenerator: () => 'MSG-${messageCounter++}',
+  serializer: OrderSerializer(),
+);
 
 // Timestamp-based
 QueueMessage.create(data, idGenerator: () => 'TS-${DateTime.now().millisecondsSinceEpoch}')
@@ -274,8 +452,6 @@ QueueMessage.create(data, idGenerator: () => 'ORDER-${Uuid().v4()}')
 QueueMessage.create(data, idGenerator: () => '${userId}-${Random().nextInt(10000)}')
 ```
 
-
-
 ### Error Handling
 
 ```dart
@@ -283,6 +459,21 @@ try {
   await queue.acknowledge('non-existent-id');
 } on MessageNotFoundError catch (e) {
   print('Message not found: ${e.messageId}');
+}
+
+try {
+  await queue.enqueuePayload(complexObject);
+} on SerializationError catch (e) {
+  print('Serialization failed: ${e.message}');
+  print('Cause: ${e.cause}');
+}
+
+try {
+  final message = await queue.dequeue();
+} on DeserializationError catch (e) {
+  print('Deserialization failed: ${e.message}');
+  print('Raw data: ${e.data}');
+  print('Cause: ${e.cause}');
 }
 ```
 
@@ -293,11 +484,14 @@ We welcome contributions! Please see our [contributing guidelines](CONTRIBUTING.
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests (87 comprehensive tests)
 dart test
 
 # Run specific implementation tests
 dart test test/in_memory_test.dart
+
+# Run serialization tests
+dart test test/serialization_test.dart
 
 # Run performance benchmarks
 dart test test/performance_test.dart
@@ -311,12 +505,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Simple**: Minimal API surface, easy to understand
 - **Reliable**: Battle-tested patterns from cloud message queuing services  
-- **Flexible**: Works with any backend via clean interface
+- **Flexible**: Works with any backend via clean interface, supports any serialization format
 - **Performant**: Optimized for high throughput and low latency
-- **Testable**: Comprehensive test suite included
-- **Production Ready**: Used in production applications
+- **Testable**: Comprehensive test suite with 87 tests included
+- **Production Ready**: Used in production applications with full serialization support
 
-Perfect for microservices, event-driven architectures, background job processing, and any application that needs reliable async message processing.
+Perfect for microservices, event-driven architectures, background job processing, and any application that needs reliable async message processing with flexible data serialization.
 
 ---
 
