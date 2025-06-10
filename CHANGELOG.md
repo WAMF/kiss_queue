@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.0]
 
 ### Enhanced ✨
 - **Comprehensive Test Coverage**: Expanded test suite from 69 to 87 tests with enhanced serialization coverage
@@ -35,7 +35,7 @@
 
 ---
 
-## [1.0.0] - Initial Release
+## [0.0.1] - Initial Release
 
 ### Features
 - Backend-agnostic queue interface
