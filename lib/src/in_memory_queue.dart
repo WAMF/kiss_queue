@@ -3,7 +3,7 @@ import 'package:collection/collection.dart';
 import 'package:kiss_queue/kiss_queue.dart';
 
 class InMemoryQueue<T> implements Queue<T> {
-  final List<QueueMessage<T>> _queue = [];
+  final List<QueueMessage<Object?>> _queue = [];
 
   @override
   final QueueConfiguration configuration;
@@ -13,6 +13,9 @@ class InMemoryQueue<T> implements Queue<T> {
 
   @override
   final String Function()? idGenerator;
+
+  @override
+  final MessageSerializer<T, Object?>? serializer;
 
   // Track message visibility and receive counts
   final Map<String, DateTime> _invisibleUntil = {};
@@ -26,6 +29,7 @@ class InMemoryQueue<T> implements Queue<T> {
     QueueConfiguration? configuration,
     this.deadLetterQueue,
     this.idGenerator,
+    this.serializer,
   }) : configuration = configuration ?? QueueConfiguration.defaultConfig {
     _startVisibilityTimer();
   }
@@ -37,7 +41,33 @@ class InMemoryQueue<T> implements Queue<T> {
       return;
     }
 
-    _queue.add(message);
+    final QueueMessage<Object?> storedMessage;
+    if (serializer != null) {
+      // Serialize only the payload for storage
+      try {
+        final serializedPayload = serializer!.serialize(message.payload);
+        storedMessage = QueueMessage<Object?>(
+          id: message.id,
+          payload: serializedPayload,
+          createdAt: message.createdAt,
+          processedAt: message.processedAt,
+          acknowledgedAt: message.acknowledgedAt,
+        );
+      } catch (e) {
+        throw SerializationError('Failed to serialize message payload', e);
+      }
+    } else {
+      // Store the original payload as-is
+      storedMessage = QueueMessage<Object?>(
+        id: message.id,
+        payload: message.payload,
+        createdAt: message.createdAt,
+        processedAt: message.processedAt,
+        acknowledgedAt: message.acknowledgedAt,
+      );
+    }
+
+    _queue.add(storedMessage);
     _receiveCount[message.id] = 0;
   }
 
@@ -53,33 +83,55 @@ class InMemoryQueue<T> implements Queue<T> {
 
     while (true) {
       // Find first visible message
-      final message = _queue.firstWhereOrNull(_isMessageVisible);
-      if (message == null) {
+      final storedMessage = _queue.firstWhereOrNull(_isMessageVisible);
+      if (storedMessage == null) {
         return null;
       }
 
       // Increment receive count
-      _receiveCount[message.id] = (_receiveCount[message.id] ?? 0) + 1;
+      _receiveCount[storedMessage.id] =
+          (_receiveCount[storedMessage.id] ?? 0) + 1;
 
       // Check if message should go to dead letter queue
-      if (_receiveCount[message.id]! > configuration.maxReceiveCount) {
+      if (_receiveCount[storedMessage.id]! > configuration.maxReceiveCount) {
         if (deadLetterQueue != null) {
-          await _moveToDeadLetterQueue(message);
+          await _moveToDeadLetterQueue(storedMessage);
         } else {
           // No dead letter queue - just remove the message permanently
-          _queue.removeWhere((element) => element.id == message.id);
-          _cleanupMessageTracking(message.id);
+          _queue.removeWhere((element) => element.id == storedMessage.id);
+          _cleanupMessageTracking(storedMessage.id);
         }
         continue; // Try to get next available message
       }
 
       // Make message invisible for visibility timeout
-      _invisibleUntil[message.id] = DateTime.now().add(
+      _invisibleUntil[storedMessage.id] = DateTime.now().add(
         configuration.visibilityTimeout,
       );
 
-      // Create processed copy with timestamp
-      final processedMessage = message.copyWith(processedAt: DateTime.now());
+      // Deserialize payload if needed and create processed message
+      final T payload;
+      if (serializer != null) {
+        try {
+          payload = serializer!.deserialize(storedMessage.payload!);
+        } catch (e) {
+          throw DeserializationError(
+            'Failed to deserialize message payload',
+            storedMessage.payload,
+            e,
+          );
+        }
+      } else {
+        payload = storedMessage.payload as T;
+      }
+
+      final processedMessage = QueueMessage<T>(
+        id: storedMessage.id,
+        payload: payload,
+        createdAt: storedMessage.createdAt,
+        processedAt: DateTime.now(),
+        acknowledgedAt: storedMessage.acknowledgedAt,
+      );
 
       return processedMessage;
     }
@@ -96,17 +148,31 @@ class InMemoryQueue<T> implements Queue<T> {
     String messageId, {
     bool requeue = true,
   }) async {
-    final message = _removeMessage(messageId);
+    final storedMessage = _removeMessage(messageId);
 
     if (requeue) {
       // Make message immediately visible again
       _invisibleUntil.remove(messageId);
-      _queue.add(message);
+      _queue.add(storedMessage);
     } else {
       _cleanupMessageTracking(messageId);
     }
 
-    return message;
+    // Convert back to the expected type for return
+    final T payload;
+    if (serializer != null) {
+      payload = serializer!.deserialize(storedMessage.payload!);
+    } else {
+      payload = storedMessage.payload as T;
+    }
+
+    return QueueMessage<T>(
+      id: storedMessage.id,
+      payload: payload,
+      createdAt: storedMessage.createdAt,
+      processedAt: storedMessage.processedAt,
+      acknowledgedAt: storedMessage.acknowledgedAt,
+    );
   }
 
   @override
@@ -116,7 +182,7 @@ class InMemoryQueue<T> implements Queue<T> {
 
   // Private helper methods
 
-  bool _isMessageVisible(QueueMessage<T> message) {
+  bool _isMessageVisible(QueueMessage<Object?> message) {
     final invisibleUntil = _invisibleUntil[message.id];
     return invisibleUntil == null || DateTime.now().isAfter(invisibleUntil);
   }
@@ -124,6 +190,12 @@ class InMemoryQueue<T> implements Queue<T> {
   bool _isMessageExpired(QueueMessage<T> message) {
     if (configuration.messageRetentionPeriod == null) return false;
     return DateTime.now().difference(message.createdAt) >
+        configuration.messageRetentionPeriod!;
+  }
+
+  bool _isStoredMessageExpired(QueueMessage<Object?> storedMessage) {
+    if (configuration.messageRetentionPeriod == null) return false;
+    return DateTime.now().difference(storedMessage.createdAt) >
         configuration.messageRetentionPeriod!;
   }
 
@@ -144,21 +216,39 @@ class InMemoryQueue<T> implements Queue<T> {
   void _cleanupExpiredMessages() {
     if (configuration.messageRetentionPeriod == null) return;
 
-    _queue.removeWhere((message) {
-      if (_isMessageExpired(message)) {
-        _cleanupMessageTracking(message.id);
+    _queue.removeWhere((storedMessage) {
+      if (_isStoredMessageExpired(storedMessage)) {
+        _cleanupMessageTracking(storedMessage.id);
         return true;
       }
       return false;
     });
   }
 
-  Future<void> _moveToDeadLetterQueue(QueueMessage<T> message) async {
-    _queue.removeWhere((element) => element.id == message.id);
-    _cleanupMessageTracking(message.id);
+  Future<void> _moveToDeadLetterQueue(
+    QueueMessage<Object?> storedMessage,
+  ) async {
+    _queue.removeWhere((element) => element.id == storedMessage.id);
+    _cleanupMessageTracking(storedMessage.id);
 
     if (deadLetterQueue != null) {
-      await deadLetterQueue!.enqueue(message);
+      // Convert back to expected type for dead letter queue
+      final T payload;
+      if (serializer != null) {
+        payload = serializer!.deserialize(storedMessage.payload!);
+      } else {
+        payload = storedMessage.payload as T;
+      }
+
+      final queueMessage = QueueMessage<T>(
+        id: storedMessage.id,
+        payload: payload,
+        createdAt: storedMessage.createdAt,
+        processedAt: storedMessage.processedAt,
+        acknowledgedAt: storedMessage.acknowledgedAt,
+      );
+
+      await deadLetterQueue!.enqueue(queueMessage);
     }
   }
 
@@ -167,13 +257,13 @@ class InMemoryQueue<T> implements Queue<T> {
     _receiveCount.remove(messageId);
   }
 
-  QueueMessage<T> _removeMessage(String messageId) {
+  QueueMessage<Object?> _removeMessage(String messageId) {
     final message = _getMessage(messageId);
     _queue.removeWhere((element) => element.id == messageId);
     return message;
   }
 
-  QueueMessage<T> _getMessage(String messageId) {
+  QueueMessage<Object?> _getMessage(String messageId) {
     final message = _queue.firstWhereOrNull(
       (element) => element.id == messageId,
     );
@@ -195,6 +285,7 @@ class InMemoryQueueFactory implements QueueFactory {
     QueueConfiguration? configuration,
     Queue<T>? deadLetterQueue,
     String Function()? idGenerator,
+    MessageSerializer<T, Object?>? serializer,
   }) async {
     if (_createdQueues.containsKey(queueName)) {
       throw QueueAlreadyExistsError(queueName);
@@ -204,6 +295,7 @@ class InMemoryQueueFactory implements QueueFactory {
       configuration: configuration,
       deadLetterQueue: deadLetterQueue,
       idGenerator: idGenerator,
+      serializer: serializer,
     );
 
     _createdQueues[queueName] = queue;

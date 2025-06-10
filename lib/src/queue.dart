@@ -103,6 +103,33 @@ class QueueConfiguration {
   );
 }
 
+/// Interface for serializing and deserializing payload objects
+///
+/// `T` is the payload type
+/// `S` is the serialized format (String, Map<String, dynamic>, List<int>, etc.)
+abstract class MessageSerializer<T, S> {
+  /// Serialize payload to the specified format
+  S serialize(T payload);
+
+  /// Deserialize from the specified format back to payload object
+  T deserialize(S data);
+}
+
+/// Exception thrown when serialization fails
+class SerializationError extends Error {
+  final String message;
+  final Object? cause;
+  SerializationError(this.message, [this.cause]);
+}
+
+/// Exception thrown when deserialization fails
+class DeserializationError extends Error {
+  final String message;
+  final Object? data;
+  final Object? cause;
+  DeserializationError(this.message, this.data, [this.cause]);
+}
+
 /// Queue interface with SQS-like reliability features built-in
 abstract class Queue<T> {
   /// Queue configuration (visibility timeout, max retries, etc.)
@@ -113,6 +140,9 @@ abstract class Queue<T> {
 
   /// Optional custom ID generator function
   String Function()? get idGenerator;
+
+  /// Serializer for converting payload objects to/from storage format
+  MessageSerializer<T, Object?>? get serializer;
 
   /// Enqueue a message
   Future<void> enqueue(QueueMessage<T> message);
@@ -151,6 +181,7 @@ abstract class QueueFactory {
     QueueConfiguration? configuration,
     Queue<T>? deadLetterQueue,
     String Function()? idGenerator,
+    MessageSerializer<T, Object?>? serializer,
   });
 
   Future<void> deleteQueue(String queueName);
