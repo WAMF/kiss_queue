@@ -110,20 +110,7 @@ class InMemoryQueue<T> implements Queue<T> {
       );
 
       // Deserialize payload if needed and create processed message
-      final T payload;
-      if (serializer != null) {
-        try {
-          payload = serializer!.deserialize(storedMessage.payload!);
-        } catch (e) {
-          throw DeserializationError(
-            'Failed to deserialize message payload',
-            storedMessage.payload,
-            e,
-          );
-        }
-      } else {
-        payload = storedMessage.payload as T;
-      }
+      final T payload = _deserializePayload(storedMessage);
 
       final processedMessage = QueueMessage<T>(
         id: storedMessage.id,
@@ -158,13 +145,8 @@ class InMemoryQueue<T> implements Queue<T> {
       _cleanupMessageTracking(messageId);
     }
 
-    // Convert back to the expected type for return
-    final T payload;
-    if (serializer != null) {
-      payload = serializer!.deserialize(storedMessage.payload!);
-    } else {
-      payload = storedMessage.payload as T;
-    }
+    // Deserialize payload if needed and create processed message
+    final T payload = _deserializePayload(storedMessage);
 
     return QueueMessage<T>(
       id: storedMessage.id,
@@ -181,6 +163,28 @@ class InMemoryQueue<T> implements Queue<T> {
   }
 
   // Private helper methods
+
+  T _deserializePayload(QueueMessage<Object?> storedMessage) {
+    if (serializer != null) {
+      try {
+        return serializer!.deserialize(storedMessage.payload!);
+      } catch (e) {
+        throw DeserializationError(
+          'Failed to deserialize message payload',
+          storedMessage.payload,
+          e,
+        );
+      }
+    } else {
+      if (storedMessage.payload is! T) {
+        throw DeserializationError(
+          'Stored payload type ${storedMessage.payload.runtimeType} does not match expected type $T',
+          storedMessage.payload,
+        );
+      }
+      return storedMessage.payload as T;
+    }
+  }
 
   bool _isMessageVisible(QueueMessage<Object?> message) {
     final invisibleUntil = _invisibleUntil[message.id];
@@ -232,13 +236,8 @@ class InMemoryQueue<T> implements Queue<T> {
     _cleanupMessageTracking(storedMessage.id);
 
     if (deadLetterQueue != null) {
-      // Convert back to expected type for dead letter queue
-      final T payload;
-      if (serializer != null) {
-        payload = serializer!.deserialize(storedMessage.payload!);
-      } else {
-        payload = storedMessage.payload as T;
-      }
+      // Deserialize payload if needed and create processed message
+      final T payload = _deserializePayload(storedMessage);
 
       final queueMessage = QueueMessage<T>(
         id: storedMessage.id,
