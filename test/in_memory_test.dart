@@ -8,9 +8,7 @@ void main() {
   runQueueTests<InMemoryQueue<Order, Order>, Order>(
     implementationName: 'InMemoryQueue',
     factoryProvider: () => test1Factory,
-    cleanup: () {
-      test1Factory.disposeAll();
-    },
+    cleanup: (factory) => factory.dispose(),
   );
 
   final serializerFactory = InMemoryQueueFactory<Order, String>(
@@ -20,9 +18,7 @@ void main() {
   runQueueTests<InMemoryQueue<Order, String>, String>(
     implementationName: 'InMemoryQueueSerializer',
     factoryProvider: () => serializerFactory,
-    cleanup: () {
-      serializerFactory.disposeAll();
-    },
+    cleanup: (factory) => factory.dispose(),
   );
 
   final customIdFactory = InMemoryQueueFactory<Order, String>(
@@ -33,8 +29,6 @@ void main() {
   runQueueTests<InMemoryQueue<Order, String>, String>(
     implementationName: 'InMemoryQueueCustomId',
     factoryProvider: () => customIdFactory,
-    cleanup: () {
-      customIdFactory.disposeAll();
-    },
+    cleanup: (factory) => factory.dispose(),
   );
 }

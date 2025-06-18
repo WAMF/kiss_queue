@@ -325,8 +325,8 @@ class InMemoryQueueFactory<T, S> implements QueueFactory<T, S> {
     queue.dispose();
   }
 
-  /// Dispose all created queues (useful for testing cleanup)
-  void disposeAll() {
+  @override
+  Future<void> dispose() async {
     for (final queue in _createdQueues.values) {
       queue.dispose();
     }

@@ -139,10 +139,10 @@ void main() {
     });
 
     tearDown(() {
-      noSerializerFactory.disposeAll();
-      jsonStringSerializerFactory.disposeAll();
-      jsonMapSerializerFactory.disposeAll();
-      binarySerializerFactory.disposeAll();
+      noSerializerFactory.dispose();
+      jsonStringSerializerFactory.dispose();
+      jsonMapSerializerFactory.dispose();
+      binarySerializerFactory.dispose();
     });
 
     group('Serializer Unit Tests', () {

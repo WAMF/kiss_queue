@@ -185,4 +185,6 @@ abstract class QueueFactory<T, S> {
   Future<void> deleteQueue(String queueName);
 
   Future<Queue<T, S>> getQueue(String queueName);
+
+  Future<void> dispose();
 }

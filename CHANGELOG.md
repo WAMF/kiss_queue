@@ -1,4 +1,9 @@
 # Changelog
+
+## [0.2.1]
+
+- **Add**: Added dispose to queue factory interface
+
 ## [0.1.1]
 
 - **Cleanup** Cleanup tests folder structure, expose them to be used by concrete implementations.
