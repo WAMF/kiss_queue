@@ -163,6 +163,7 @@ abstract class Queue<T, S> {
   // Queue configuration and dead letter queue  
   QueueConfiguration get configuration;
   Queue<T, S>? get deadLetterQueue;
+  String Function()? get idGenerator;
   MessageSerializer<T, S>? get serializer;
   
   // Core operations
@@ -174,6 +175,21 @@ abstract class Queue<T, S> {
   
   // Cleanup
   void dispose();
+}
+```
+
+### QueueFactory Interface
+
+```dart
+abstract class QueueFactory<T, S> {
+  Future<Queue<T, S>> createQueue(
+    String queueName, {
+    QueueConfiguration? configuration,
+    Queue<T, S>? deadLetterQueue,
+  });
+  
+  Future<Queue<T, S>> getQueue(String queueName);
+  Future<void> deleteQueue(String queueName);
 }
 ```
 
@@ -292,11 +308,16 @@ try {
 Perfect for development, testing, and single-instance applications:
 
 ```dart
+// Basic factory
 final factory = InMemoryQueueFactory();
-final queue = await factory.createQueue<MyData, String>(
-  'my-queue',
+
+// Factory with default ID generator and serializer
+final factory = InMemoryQueueFactory<MyData, String>(
+  idGenerator: () => 'MSG-${DateTime.now().millisecondsSinceEpoch}',
   serializer: MySerializer(),
 );
+
+final queue = await factory.createQueue<MyData, String>('my-queue');
 ```
 
 ### Custom Implementations
@@ -310,9 +331,13 @@ The generic interface makes it easy to implement queues for any backend:
 - **Apache Kafka**: High-throughput event streaming
 - **RabbitMQ**: Feature-rich message broker
 
-## 🧪 Testing Your Implementation
+## 🧪 Instant Implementation Testing
 
-`kiss_queue` includes a comprehensive test suite that can validate any implementation with just one line of code:
+**Test any queue implementation instantly with one line of code!** 
+
+The `ImplementationTester` class provides 87 comprehensive tests that validate any custom queue implementation automatically. No need to write your own tests - just provide your factory and let the tester do the work.
+
+### Zero-Effort Testing
 
 ```dart
 // test/my_implementation_test.dart
@@ -325,44 +350,44 @@ void main() {
     factory.disposeAll(); // Your cleanup logic
   });
   
-  tester.run(); // That's it! 87 comprehensive tests will run
+  tester.run(); // That's it! 87 comprehensive tests will run instantly
 }
 ```
 
-**Test Coverage**: 87 tests covering functionality, serialization, performance, concurrency, and edge cases.
+**Instant Results**: Run `dart test` and get complete validation of your implementation across functionality, performance, serialization, concurrency, and edge cases.
 
-### Comprehensive Test Coverage
+### What Gets Tested Automatically
 
-- ✅ **Core functionality** (`enqueue`, `enqueuePayload`, `dequeue`, acknowledge, reject)
-- ✅ **Serialization testing** (JSON, binary, Map serializers + error handling)
-- ✅ **Performance benchmarks** (throughput, latency, concurrency)
-- ✅ **Edge cases** (timeouts, retries, dead letters, non-existent messages)
-- ✅ **Factory management** (create, get, delete queues)
-- ✅ **Queue equivalence** (both enqueue methods produce identical results)
+The `ImplementationTester` validates your implementation across these areas:
 
-### Steps to Test Your Implementation
+- ✅ **Core Queue Operations**: All `enqueue`, `enqueuePayload`, `dequeue`, `acknowledge`, and `reject` functionality
+- ✅ **Serialization Support**: JSON, binary, and Map serializers with full error handling validation
+- ✅ **Performance & Concurrency**: Throughput benchmarks, latency tests, and multi-consumer scenarios
+- ✅ **Reliability Features**: Visibility timeouts, dead letter queues, message expiration, and retry logic
+- ✅ **Edge Cases**: Non-existent messages, timeout scenarios, malformed data, and cleanup operations
+- ✅ **Factory Management**: Queue creation, retrieval, deletion, and lifecycle management
+- ✅ **API Consistency**: Ensures both `enqueue()` and `enqueuePayload()` produce identical results
 
-1. **Implement your QueueFactory** (with your custom Queue implementation)
-2. **Create a test file** with `ImplementationTester`
-3. **Run**: `dart test my_implementation_test.dart`
+### Three Steps to Full Test Coverage
 
-That's it! The `ImplementationTester` automatically runs both functional and performance tests with appropriate configurations.
+1. **Build Your Implementation**: Create your custom `QueueFactory` and `Queue` classes implementing the kiss_queue interfaces
+2. **Add the Tester**: Create a test file with `ImplementationTester` pointing to your factory
+3. **Run Tests**: Execute `dart test` to get instant validation with 87 comprehensive tests
+
+The `ImplementationTester` automatically configures appropriate test scenarios for your implementation, including performance benchmarks and stress tests.
 
 ## ⚙️ Configuration
 
 ### Predefined Configurations
 
 ```dart
-// Fast, high-volume (development/testing)
-QueueConfiguration.inMemory
-
-// Balanced (cloud services)  
-QueueConfiguration.cloud
+// Default configuration (balanced settings)
+QueueConfiguration.defaultConfig
 
 // High throughput (production)
 QueueConfiguration.highThroughput
 
-// Quick testing
+// Quick testing (shorter timeouts)
 QueueConfiguration.testing
 ```
 
@@ -434,15 +459,15 @@ await queue.enqueuePayload(payload);
 #### Custom ID Generation Examples
 
 ```dart
-// Sequential counter
+// Sequential counter at factory level
 int messageCounter = 1000;
-final queue = await factory.createQueue<Order, String>(
-  'orders',
+final factory = InMemoryQueueFactory<Order, String>(
   idGenerator: () => 'MSG-${messageCounter++}',
   serializer: OrderSerializer(),
 );
+final queue = await factory.createQueue<Order, String>('orders');
 
-// Timestamp-based
+// Custom ID generation per message
 QueueMessage.create(data, idGenerator: () => 'TS-${DateTime.now().millisecondsSinceEpoch}')
 
 // Prefixed UUID
