@@ -1,4 +1,7 @@
 # Changelog
+## [0.1.1]
+
+- **Cleanup** Cleanup tests folder structure, expose them to be used by concrete implementations.
 
 ## [0.1.0]
 
