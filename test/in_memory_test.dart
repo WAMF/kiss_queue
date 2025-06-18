@@ -1,41 +1,40 @@
-/*import 'package:kiss_queue/kiss_queue.dart';
+import 'package:kiss_queue/kiss_queue.dart';
+import 'package:kiss_queue_tests/kiss_queue_tests.dart';
 
 import 'serialization_test.dart';
 
 void main() {
-  final defaultFactory = InMemoryQueueFactory<Order, Order>();
-  final tester = ImplementationTester('InMemoryQueue', defaultFactory, () {
-    defaultFactory.disposeAll();
-  });
-
-  tester.run();
+  final test1Factory = InMemoryQueueFactory<Order, Order>();
+  runQueueTests<InMemoryQueue<Order, Order>, Order>(
+    implementationName: 'InMemoryQueue',
+    factoryProvider: () => test1Factory,
+    cleanup: () {
+      test1Factory.disposeAll();
+    },
+  );
 
   final serializerFactory = InMemoryQueueFactory<Order, String>(
     serializer: JsonStringSerializer(),
   );
 
-  final tester2 = ImplementationTester<String>(
-    'InMemoryQueueSerializer',
-    serializerFactory,
-    () {
+  runQueueTests<InMemoryQueue<Order, String>, String>(
+    implementationName: 'InMemoryQueueSerializer',
+    factoryProvider: () => serializerFactory,
+    cleanup: () {
       serializerFactory.disposeAll();
     },
   );
-
-  tester2.run();
 
   final customIdFactory = InMemoryQueueFactory<Order, String>(
     serializer: JsonStringSerializer(),
     idGenerator: () => 'custom-id-${DateTime.now().millisecondsSinceEpoch}',
   );
 
-  final tester3 = ImplementationTester<String>(
-    'InMemoryQueueCustomId',
-    customIdFactory,
-    () {
+  runQueueTests<InMemoryQueue<Order, String>, String>(
+    implementationName: 'InMemoryQueueCustomId',
+    factoryProvider: () => customIdFactory,
+    cleanup: () {
       customIdFactory.disposeAll();
     },
   );
-
-  tester3.run();
-}*/
+}
