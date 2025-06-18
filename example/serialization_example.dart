@@ -104,7 +104,9 @@ class OrderBinarySerializer implements MessageSerializer<Order, List<int>> {
 }
 
 void main() async {
-  final factory = InMemoryQueueFactory();
+  final factory = InMemoryQueueFactory<Order, String>(
+    serializer: OrderJsonSerializer(),
+  );
 
   print('=== Kiss Queue Serialization Examples ===\n');
 
@@ -149,10 +151,7 @@ Future<void> demonstrateJsonSerialization(
   List<Order> orders,
 ) async {
   // Create queue with JSON serialization
-  final orderQueue = await factory.createQueue<Order, String>(
-    'json-orders',
-    serializer: OrderJsonSerializer(),
-  );
+  final orderQueue = await factory.createQueue('json-orders');
 
   print('📦 Enqueuing orders with JSON serialization...');
 
@@ -181,11 +180,11 @@ Future<void> demonstrateBinarySerialization(
   InMemoryQueueFactory factory,
   List<Order> orders,
 ) async {
-  // Create queue with binary serialization
-  final binaryQueue = await factory.createQueue<Order, List<int>>(
-    'binary-orders',
+  final binaryFactory = InMemoryQueueFactory<Order, List<int>>(
     serializer: OrderBinarySerializer(),
   );
+  // Create queue with binary serialization
+  final binaryQueue = await binaryFactory.createQueue('binary-orders');
 
   print('📦 Enqueuing order with binary serialization...');
   await binaryQueue.enqueuePayload(orders[0]);
@@ -203,9 +202,9 @@ Future<void> demonstrateBinarySerialization(
 
 Future<void> demonstrateDirectStorage(InMemoryQueueFactory factory) async {
   // No serializer needed when T == S
-  final stringQueue = await factory.createQueue<String, String>(
-    'direct-strings',
-  );
+
+  final stringFactory = InMemoryQueueFactory<String, String>();
+  final stringQueue = await stringFactory.createQueue('direct-strings');
 
   print('📦 Storing strings directly (no serialization overhead)...');
   await stringQueue.enqueuePayload('Direct string message 1');
@@ -227,14 +226,12 @@ Future<void> demonstrateMethodEquivalence(
   InMemoryQueueFactory factory,
   Order order,
 ) async {
-  final queue1 = await factory.createQueue<Order, String>(
-    'equiv-queue-1',
+  final jsonFactory = InMemoryQueueFactory<Order, String>(
     serializer: OrderJsonSerializer(),
   );
-  final queue2 = await factory.createQueue<Order, String>(
-    'equiv-queue-2',
-    serializer: OrderJsonSerializer(),
-  );
+
+  final queue1 = await jsonFactory.createQueue('equiv-queue-1');
+  final queue2 = await jsonFactory.createQueue('equiv-queue-2');
 
   print('📦 Testing that both enqueue methods produce identical results...');
 
@@ -261,10 +258,10 @@ Future<void> demonstrateErrorHandling(InMemoryQueueFactory factory) async {
   print('🚨 Testing error handling scenarios...\n');
 
   // Create a faulty serializer for demonstration
-  final faultyQueue = await factory.createQueue<Order, String>(
-    'error-demo',
+  final faultyFactory = InMemoryQueueFactory<Order, String>(
     serializer: _FaultySerializer(),
   );
+  final faultyQueue = await faultyFactory.createQueue('error-demo');
 
   final testOrder = Order(
     orderId: 'TEST-ERROR',
@@ -283,7 +280,8 @@ Future<void> demonstrateErrorHandling(InMemoryQueueFactory factory) async {
   }
 
   // Demonstrate MessageNotFoundError
-  final validQueue = await factory.createQueue<String, String>('valid-queue');
+  final validFactory = InMemoryQueueFactory<String, String>();
+  final validQueue = await validFactory.createQueue('valid-queue');
 
   try {
     await validQueue.acknowledge('non-existent-message-id');

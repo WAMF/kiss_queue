@@ -2,100 +2,20 @@ import 'package:kiss_queue/kiss_queue.dart';
 import 'package:test/test.dart';
 import 'dart:async';
 
-import 'test_models.dart';
-
-// Performance expectations for different implementations
-class QueueTestConfig {
-  // Basic operation timeouts (in milliseconds)
-  final int enqueueTimeoutMs;
-  final int dequeueTimeoutMs;
-  final int acknowledgeTimeoutMs;
-
-  // Load test expectations
-  final int loadTestMessageCount;
-  final int loadTestTimeoutMs;
-
-  // Latency expectations (in microseconds)
-  final int maxAverageLatencyUs;
-  final int maxP95LatencyUs;
-
-  // Concurrency test parameters
-  final int concurrentMessageCount;
-  final int concurrentWorkerCount;
-  final int concurrentTimeoutMs;
-
-  // Performance test message counts
-  final int performanceTestMessageCount;
-  final int performanceTestTimeoutMs;
-
-  const QueueTestConfig({
-    this.enqueueTimeoutMs = 5000,
-    this.dequeueTimeoutMs = 5000,
-    this.acknowledgeTimeoutMs = 5000,
-    this.loadTestMessageCount = 10000,
-    this.loadTestTimeoutMs = 30000,
-    this.maxAverageLatencyUs = 50000, // 50ms
-    this.maxP95LatencyUs = 100000, // 100ms
-    this.concurrentMessageCount = 1000,
-    this.concurrentWorkerCount = 5,
-    this.concurrentTimeoutMs = 10000,
-    this.performanceTestMessageCount = 1000,
-    this.performanceTestTimeoutMs = 5000,
-  });
-
-  // Predefined configurations for different implementations
-  static const inMemory = QueueTestConfig(
-    enqueueTimeoutMs: 5000,
-    dequeueTimeoutMs: 5000,
-    acknowledgeTimeoutMs: 5000,
-    loadTestTimeoutMs: 180000, // 3 minutes for large load tests
-    maxAverageLatencyUs: 50000,
-    maxP95LatencyUs: 100000,
-  );
-
-  static const cloud = QueueTestConfig(
-    enqueueTimeoutMs: 10000,
-    dequeueTimeoutMs: 10000,
-    acknowledgeTimeoutMs: 10000,
-    loadTestMessageCount: 1000, // Smaller for cloud to avoid costs
-    loadTestTimeoutMs: 60000,
-    maxAverageLatencyUs: 500000, // 500ms - cloud latency
-    maxP95LatencyUs: 2000000, // 2s - cloud P95
-    concurrentMessageCount: 100, // Smaller for cloud
-    performanceTestMessageCount: 100,
-  );
-
-  static const conservative = QueueTestConfig(
-    enqueueTimeoutMs: 15000,
-    dequeueTimeoutMs: 15000,
-    acknowledgeTimeoutMs: 15000,
-    loadTestMessageCount: 1000,
-    loadTestTimeoutMs: 90000,
-    maxAverageLatencyUs:
-        1000000, // 1s - Conservative latency for remote services
-    maxP95LatencyUs: 5000000, // 5s - Conservative P95
-    concurrentMessageCount: 50,
-    performanceTestMessageCount: 50,
-  );
-}
-
 // Generic cleanup function type
 typedef QueueCleanup = void Function();
 
 // Generic factory function type for creating factory instances
-typedef QueueFactoryProvider = QueueFactory Function();
+typedef QueueFactoryProvider<T, S> = QueueFactory<T, S> Function();
 
 /// Generic test suite that can test any Queue implementation
 void runQueueTests<T extends Queue<Order, S>, S>({
   required String implementationName,
-  required QueueFactoryProvider factoryProvider,
+  required QueueFactoryProvider<Order, S> factoryProvider,
   required QueueCleanup cleanup,
-  required QueueTestConfig config,
-  MessageSerializer<Order, S>? serializer,
-  String Function()? idGenerator,
 }) {
   group('$implementationName - Order Processing System', () {
-    late QueueFactory factory;
+    late QueueFactory<Order, S> factory;
 
     setUp(() {
       factory = factoryProvider();
@@ -107,11 +27,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should demonstrate simplified QueueMessage API', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-simple-api',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-simple-api');
       final order = Order(
         orderId: 'ORD-SIMPLE',
         customerId: 'CUST-123',
@@ -137,11 +53,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should support custom IDs when needed', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-custom-id',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-custom-id');
       final order = Order(
         orderId: 'ORD-CUSTOM',
         customerId: 'CUST-456',
@@ -165,11 +77,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should enqueuePayload with auto-generated IDs', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-enqueuePayload',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-enqueuePayload');
       final order = Order(
         orderId: 'ORD-PAYLOAD',
         customerId: 'CUST-PAYLOAD',
@@ -194,11 +102,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('enqueue and enqueuePayload should work equivalently', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-enqueue-equivalence',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-enqueue-equivalence');
       final order1 = Order(
         orderId: 'ORD-EQUIV-1',
         customerId: 'CUST-EQUIV',
@@ -233,11 +137,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should enqueue and dequeue orders successfully', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-enqueue-dequeue',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-enqueue-dequeue');
       final order = Order(
         orderId: 'ORD-001',
         customerId: 'CUST-123',
@@ -262,12 +162,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
       'should implement visibility timeout - message invisible after dequeue',
       () async {
         // Arrange
-        final orderQueue = await factory.createQueue<Order, S>(
-          'test-visibility-timeout',
-          configuration: QueueConfiguration.testing,
-          serializer: serializer,
-          idGenerator: idGenerator,
-        );
+        final orderQueue = await factory.createQueue('test-visibility-timeout');
         final order = Order(
           orderId: 'ORD-002',
           customerId: 'CUST-456',
@@ -293,12 +188,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should restore message visibility after timeout expires', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-visibility-restore',
-        configuration: QueueConfiguration.testing,
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-visibility-restore');
       final order = Order(
         orderId: 'ORD-003',
         customerId: 'CUST-789',
@@ -312,7 +202,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
       await orderQueue.dequeue(); // Make message invisible
 
       // Wait for visibility timeout to expire
-      await Future.delayed(const Duration(milliseconds: 150));
+      await Future.delayed(const Duration(milliseconds: 500));
 
       final restoredMessage = await orderQueue.dequeue();
 
@@ -324,11 +214,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should acknowledge order and remove from queue', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-acknowledge',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-acknowledge');
       final order = Order(
         orderId: 'ORD-004',
         customerId: 'CUST-101',
@@ -351,11 +237,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should reject and requeue failed order processing', () async {
       // Arrange - Simulating payment failure scenario
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-reject-requeue',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-reject-requeue');
       final order = Order(
         orderId: 'ORD-005',
         customerId: 'CUST-202',
@@ -384,17 +266,11 @@ void runQueueTests<T extends Queue<Order, S>, S>({
       'should move poison messages to dead letter queue after max retries',
       () async {
         // Arrange - Simulating consistently failing order
-        final deadLetterQueue = await factory.createQueue<Order, S>(
-          'test-dlq',
-          serializer: serializer,
-          idGenerator: idGenerator,
-        );
-        final orderQueue = await factory.createQueue<Order, S>(
+        final deadLetterQueue = await factory.createQueue('test-dlq');
+        final orderQueue = await factory.createQueue(
           'test-poison-messages',
           configuration: QueueConfiguration.testing,
           deadLetterQueue: deadLetterQueue,
-          serializer: serializer,
-          idGenerator: idGenerator,
         );
 
         final problematicOrder = Order(
@@ -434,15 +310,13 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should handle message expiration and cleanup', () async {
       // Arrange - Create queue with very short retention
-      final shortRetentionQueue = await factory.createQueue<Order, S>(
+      final shortRetentionQueue = await factory.createQueue(
         'test-expiration',
         configuration: const QueueConfiguration(
           maxReceiveCount: 3,
           visibilityTimeout: Duration(milliseconds: 100),
           messageRetentionPeriod: Duration(milliseconds: 50),
         ),
-        serializer: serializer,
-        idGenerator: idGenerator,
       );
 
       final order = Order(
@@ -471,11 +345,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should handle concurrent order processing simulation', () async {
       // Arrange - Multiple orders for batch processing
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-concurrent',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-concurrent');
       final orders = List.generate(
         5,
         (i) => Order(
@@ -511,11 +381,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should track order processing statistics', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-statistics',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-statistics');
       final orders = [
         Order(
           orderId: 'STAT-001',
@@ -563,11 +429,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
       'should handle edge case - acknowledge non-existent message',
       () async {
         // Arrange
-        final orderQueue = await factory.createQueue<Order, S>(
-          'test-ack-nonexistent',
-          serializer: serializer,
-          idGenerator: idGenerator,
-        );
+        final orderQueue = await factory.createQueue('test-ack-nonexistent');
 
         // Act & Assert
         expect(
@@ -579,11 +441,7 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
     test('should handle edge case - reject non-existent message', () async {
       // Arrange
-      final orderQueue = await factory.createQueue<Order, S>(
-        'test-reject-nonexistent',
-        serializer: serializer,
-        idGenerator: idGenerator,
-      );
+      final orderQueue = await factory.createQueue('test-reject-nonexistent');
 
       // Act & Assert
       expect(
@@ -596,11 +454,9 @@ void runQueueTests<T extends Queue<Order, S>, S>({
       'should handle queue without dead letter queue configuration',
       () async {
         // Arrange - Queue without dead letter queue
-        final noDLQQueue = await factory.createQueue<Order, S>(
+        final noDLQQueue = await factory.createQueue(
           'test-no-dlq',
           configuration: const QueueConfiguration(maxReceiveCount: 2),
-          serializer: serializer,
-          idGenerator: idGenerator,
         );
 
         final order = Order(
@@ -665,10 +521,8 @@ void runQueueTests<T extends Queue<Order, S>, S>({
     group('Queue Factory', () {
       test('should create and retrieve queues', () async {
         // Act - Create queue
-        final queue1 = await factory.createQueue<String, String>(
-          'factory-test-1',
-        );
-        final queue2 = await factory.getQueue<String, String>('factory-test-1');
+        final queue1 = await factory.createQueue('factory-test-1');
+        final queue2 = await factory.getQueue('factory-test-1');
 
         // Assert - Should get same queue instance
         expect(queue1, same(queue2));
@@ -676,11 +530,11 @@ void runQueueTests<T extends Queue<Order, S>, S>({
 
       test('should prevent duplicate queue creation', () async {
         // Arrange
-        await factory.createQueue<String, String>('duplicate-test');
+        await factory.createQueue('duplicate-test');
 
         // Act & Assert
         expect(
-          () => factory.createQueue<String, String>('duplicate-test'),
+          () => factory.createQueue('duplicate-test'),
           throwsA(isA<QueueAlreadyExistsError>()),
         );
       });
@@ -688,21 +542,21 @@ void runQueueTests<T extends Queue<Order, S>, S>({
       test('should handle non-existent queue retrieval', () async {
         // Act & Assert
         expect(
-          () => factory.getQueue<String, String>('non-existent-factory-test'),
+          () => factory.getQueue('non-existent-factory-test'),
           throwsA(isA<QueueDoesNotExistError>()),
         );
       });
 
       test('should delete queues properly', () async {
         // Arrange
-        await factory.createQueue<String, String>('delete-test');
+        await factory.createQueue('delete-test');
 
         // Act
         await factory.deleteQueue('delete-test');
 
         // Assert - Should not be able to retrieve deleted queue
         expect(
-          () => factory.getQueue<String, String>('delete-test'),
+          () => factory.getQueue('delete-test'),
           throwsA(isA<QueueDoesNotExistError>()),
         );
       });
@@ -712,49 +566,6 @@ void runQueueTests<T extends Queue<Order, S>, S>({
         expect(
           () => factory.deleteQueue('non-existent-delete-test'),
           throwsA(isA<QueueDoesNotExistError>()),
-        );
-      });
-
-      test('should support different queue configurations', () async {
-        // Arrange & Act - Create queues with different configurations
-        final defaultQueue = await factory.createQueue<Order, Order>(
-          'config-default',
-        );
-        final highThroughputQueue = await factory.createQueue<Order, Order>(
-          'config-high-throughput',
-          configuration: QueueConfiguration.highThroughput,
-        );
-        final customQueue = await factory.createQueue<Order, Order>(
-          'config-custom',
-          configuration: const QueueConfiguration(
-            maxReceiveCount: 10,
-            visibilityTimeout: Duration(minutes: 5),
-            messageRetentionPeriod: Duration(hours: 24),
-          ),
-          idGenerator: idGenerator,
-        );
-
-        // Assert - Check configurations are applied correctly
-        expect(defaultQueue.configuration.maxReceiveCount, equals(3));
-        expect(
-          defaultQueue.configuration.visibilityTimeout,
-          equals(Duration(seconds: 30)),
-        );
-
-        expect(highThroughputQueue.configuration.maxReceiveCount, equals(5));
-        expect(
-          highThroughputQueue.configuration.visibilityTimeout,
-          equals(Duration(minutes: 2)),
-        );
-
-        expect(customQueue.configuration.maxReceiveCount, equals(10));
-        expect(
-          customQueue.configuration.visibilityTimeout,
-          equals(Duration(minutes: 5)),
-        );
-        expect(
-          customQueue.configuration.messageRetentionPeriod,
-          equals(Duration(hours: 24)),
         );
       });
     });

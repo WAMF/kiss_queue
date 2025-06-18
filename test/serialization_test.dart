@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'package:kiss_queue/kiss_queue.dart';
 import 'package:test/test.dart';
 
-import 'test_models.dart';
-
 extension OrderExtension on Order {
   Map<String, dynamic> toJson() => {
     'orderId': orderId,
@@ -113,7 +111,11 @@ class BinarySerializer implements MessageSerializer<Order, List<int>> {
 void main() {
   group('Serialization Interface Tests', () {
     late Order testOrder;
-    late InMemoryQueueFactory factory;
+    late InMemoryQueueFactory<Order, String> noSerializerFactory;
+    late InMemoryQueueFactory<Order, String> jsonStringSerializerFactory;
+    late InMemoryQueueFactory<Order, Map<String, dynamic>>
+    jsonMapSerializerFactory;
+    late InMemoryQueueFactory<Order, List<int>> binarySerializerFactory;
 
     setUp(() {
       testOrder = Order(
@@ -122,11 +124,24 @@ void main() {
         amount: 99.99,
         items: ['Item 1', 'Item 2'],
       );
-      factory = InMemoryQueueFactory();
+      noSerializerFactory = InMemoryQueueFactory<Order, String>();
+      jsonStringSerializerFactory = InMemoryQueueFactory<Order, String>(
+        serializer: JsonStringSerializer(),
+      );
+      jsonMapSerializerFactory =
+          InMemoryQueueFactory<Order, Map<String, dynamic>>(
+            serializer: JsonMapSerializer(),
+          );
+      binarySerializerFactory = InMemoryQueueFactory<Order, List<int>>(
+        serializer: BinarySerializer(),
+      );
     });
 
     tearDown(() {
-      factory.disposeAll();
+      noSerializerFactory.disposeAll();
+      jsonStringSerializerFactory.disposeAll();
+      jsonMapSerializerFactory.disposeAll();
+      binarySerializerFactory.disposeAll();
     });
 
     group('Serializer Unit Tests', () {
@@ -182,9 +197,8 @@ void main() {
 
     group('Queue Integration with Serializers', () {
       test('enqueuePayload should work with JsonStringSerializer', () async {
-        final queue = await factory.createQueue<Order, String>(
+        final queue = await jsonStringSerializerFactory.createQueue(
           'test-enqueuePayload-string',
-          serializer: JsonStringSerializer(),
         );
 
         expect(queue.serializer, isA<JsonStringSerializer>());
@@ -200,9 +214,8 @@ void main() {
       });
 
       test('enqueue should work with JsonStringSerializer', () async {
-        final queue = await factory.createQueue<Order, String>(
+        final queue = await jsonStringSerializerFactory.createQueue(
           'test-enqueue-string',
-          serializer: JsonStringSerializer(),
         );
 
         // Test enqueue with QueueMessage
@@ -218,13 +231,11 @@ void main() {
       test(
         'enqueuePayload and enqueue should behave identically with serializer',
         () async {
-          final queue1 = await factory.createQueue<Order, String>(
+          final queue1 = await jsonStringSerializerFactory.createQueue(
             'test-enqueuePayload-identical',
-            serializer: JsonStringSerializer(),
           );
-          final queue2 = await factory.createQueue<Order, String>(
+          final queue2 = await jsonStringSerializerFactory.createQueue(
             'test-enqueue-identical',
-            serializer: JsonStringSerializer(),
           );
 
           // Test both methods with same data
@@ -246,15 +257,13 @@ void main() {
 
       test('Queue should work with different serializers', () async {
         // Test with Map serializer
-        final mapQueue = await factory.createQueue<Order, Map<String, dynamic>>(
+        final mapQueue = await jsonMapSerializerFactory.createQueue(
           'test-map-serializer',
-          serializer: JsonMapSerializer(),
         );
 
         // Test with Binary serializer
-        final binaryQueue = await factory.createQueue<Order, List<int>>(
+        final binaryQueue = await binarySerializerFactory.createQueue(
           'test-binary-serializer',
-          serializer: BinarySerializer(),
         );
 
         // Test both with enqueuePayload
@@ -272,7 +281,8 @@ void main() {
       });
 
       test('Queue should work without a serializer', () async {
-        final queue = await factory.createQueue<Order, Order>(
+        final noSerializerFactory = InMemoryQueueFactory<Order, Order>();
+        final queue = await noSerializerFactory.createQueue(
           'test-no-serializer',
         );
 
@@ -305,9 +315,12 @@ void main() {
             onDeserialize: () => deserializeCallCount++,
           );
 
-          final queue = await factory.createQueue<Order, String>(
-            'test-tracking-serializer',
+          final trackingSerializerFactory = InMemoryQueueFactory<Order, Order>(
             serializer: trackingSerializer,
+          );
+
+          final queue = await trackingSerializerFactory.createQueue(
+            'test-tracking-serializer',
           );
 
           // Test enqueuePayload calls serialize
@@ -340,8 +353,9 @@ void main() {
       test(
         'Queue without serializer should not call any serialization',
         () async {
+          final noSerializerFactory = InMemoryQueueFactory<Order, Order>();
           // This test ensures no serialization overhead when T == S
-          final queue = await factory.createQueue<Order, Order>(
+          final queue = await noSerializerFactory.createQueue(
             'test-no-serializer-calls',
           );
 
@@ -440,13 +454,12 @@ void main() {
       test(
         'Should throw SerializationError during enqueuePayload if serialization fails',
         () async {
-          final faultySerializer = _FaultySerializer<Order>(
-            failOnSerialize: true,
+          final faultySerializerFactory = InMemoryQueueFactory<Order, String>(
+            serializer: _FaultySerializer<Order>(failOnSerialize: true),
           );
 
-          final queue = await factory.createQueue<Order, String>(
+          final queue = await faultySerializerFactory.createQueue(
             'test-enqueuePayload-serialize-error',
-            serializer: faultySerializer,
           );
 
           expect(
@@ -463,9 +476,12 @@ void main() {
             failOnSerialize: true,
           );
 
-          final queue = await factory.createQueue<Order, String>(
-            'test-enqueue-serialize-error',
+          final faultySerializerFactory = InMemoryQueueFactory<Order, String>(
             serializer: faultySerializer,
+          );
+
+          final queue = await faultySerializerFactory.createQueue(
+            'test-enqueue-serialize-error',
           );
 
           expect(
@@ -478,13 +494,12 @@ void main() {
       test(
         'Should throw DeserializationError during dequeue if deserialization fails',
         () async {
-          final faultySerializer = _FaultySerializer<Order>(
-            failOnDeserialize: true,
+          final faultySerializerFactory = InMemoryQueueFactory<Order, String>(
+            serializer: _FaultySerializer<Order>(failOnDeserialize: true),
           );
 
-          final queue = await factory.createQueue<Order, String>(
+          final queue = await faultySerializerFactory.createQueue(
             'test-deserialize-error',
-            serializer: faultySerializer,
           );
 
           // Enqueue should work (serialization is not failing)
@@ -499,22 +514,22 @@ void main() {
 }
 
 /// Test serializer that tracks when serialize/deserialize are called
-class _TrackingSerializer implements MessageSerializer<Order, String> {
+class _TrackingSerializer implements MessageSerializer<Order, Order> {
   final void Function() onSerialize;
   final void Function() onDeserialize;
 
   _TrackingSerializer({required this.onSerialize, required this.onDeserialize});
 
   @override
-  String serialize(Order payload) {
+  Order serialize(Order payload) {
     onSerialize();
-    return JsonStringSerializer().serialize(payload);
+    return payload;
   }
 
   @override
-  Order deserialize(String data) {
+  Order deserialize(Order data) {
     onDeserialize();
-    return JsonStringSerializer().deserialize(data);
+    return data;
   }
 }
 

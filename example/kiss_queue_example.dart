@@ -1,17 +1,20 @@
 import 'package:kiss_queue/kiss_queue.dart';
 
 void main() async {
+  int messageCounter = 1000;
   // Create factory for managing queues
-  final factory = InMemoryQueueFactory();
+  final defaultFactory = InMemoryQueueFactory<String, String>();
+  final customIdFactory = InMemoryQueueFactory<String, String>(
+    idGenerator: () => 'MSG-${messageCounter++}',
+  );
 
   print('=== Demonstrating Queue-Level Custom ID Generation ===\n');
 
   // Create a queue with a custom ID generator configured at the queue level
-  int messageCounter = 1000;
-  final queueWithCustomIds = await factory.createQueue<String, String>(
+
+  final queueWithCustomIds = await customIdFactory.createQueue(
     'custom-id-queue',
     configuration: QueueConfiguration.defaultConfig,
-    idGenerator: () => 'MSG-${messageCounter++}',
   );
 
   // Now all messages use the custom ID generator automatically
@@ -21,7 +24,7 @@ void main() async {
   print('=== Demonstrating Multiple ID Generation Methods ===\n');
 
   // Create a standard queue (uses UUID by default)
-  final standardQueue = await factory.createQueue<String, String>(
+  final standardQueue = await defaultFactory.createQueue(
     'standard-queue',
     configuration: QueueConfiguration.defaultConfig,
   );
@@ -88,6 +91,7 @@ void main() async {
   }
 
   // Clean up
-  factory.disposeAll();
+  defaultFactory.disposeAll();
+  customIdFactory.disposeAll();
   print('Queues disposed - example complete!');
 }

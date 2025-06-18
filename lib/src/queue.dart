@@ -175,16 +175,14 @@ class QueueDoesNotExistError extends Error {
   QueueDoesNotExistError(this.queueName);
 }
 
-abstract class QueueFactory {
-  Future<Queue<T, S>> createQueue<T, S>(
+abstract class QueueFactory<T, S> {
+  Future<Queue<T, S>> createQueue(
     String queueName, {
     QueueConfiguration? configuration,
     Queue<T, S>? deadLetterQueue,
-    String Function()? idGenerator,
-    MessageSerializer<T, S>? serializer,
   });
 
   Future<void> deleteQueue(String queueName);
 
-  Future<Queue<T, S>> getQueue<T, S>(String queueName);
+  Future<Queue<T, S>> getQueue(String queueName);
 }

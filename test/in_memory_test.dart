@@ -1,35 +1,40 @@
 import 'package:kiss_queue/kiss_queue.dart';
 
-import 'implementation_tester.dart';
 import 'serialization_test.dart';
 
 void main() {
-  final factory = InMemoryQueueFactory();
-  final tester = ImplementationTester('InMemoryQueue', factory, () {
-    factory.disposeAll();
+  final defaultFactory = InMemoryQueueFactory<Order, Order>();
+  final tester = ImplementationTester('InMemoryQueue', defaultFactory, () {
+    defaultFactory.disposeAll();
   });
 
   tester.run();
 
+  final serializerFactory = InMemoryQueueFactory<Order, String>(
+    serializer: JsonStringSerializer(),
+  );
+
   final tester2 = ImplementationTester<String>(
     'InMemoryQueueSerializer',
-    factory,
+    serializerFactory,
     () {
-      factory.disposeAll();
+      serializerFactory.disposeAll();
     },
-    serializer: JsonStringSerializer(),
   );
 
   tester2.run();
 
-  final tester3 = ImplementationTester<String>(
-    'InMemoryQueueCustomId',
-    factory,
-    () {
-      factory.disposeAll();
-    },
+  final customIdFactory = InMemoryQueueFactory<Order, String>(
     serializer: JsonStringSerializer(),
     idGenerator: () => 'custom-id-${DateTime.now().millisecondsSinceEpoch}',
+  );
+
+  final tester3 = ImplementationTester<String>(
+    'InMemoryQueueCustomId',
+    customIdFactory,
+    () {
+      customIdFactory.disposeAll();
+    },
   );
 
   tester3.run();

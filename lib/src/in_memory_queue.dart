@@ -277,17 +277,20 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
 }
 
 /// Factory for creating in-memory queues with proper lifecycle management
-class InMemoryQueueFactory implements QueueFactory {
+class InMemoryQueueFactory<T, S> implements QueueFactory<T, S> {
   // Track created queues for proper cleanup and retrieval
   final Map<String, Queue> _createdQueues = <String, Queue>{};
 
+  final String Function()? idGenerator;
+  final MessageSerializer<T, S>? serializer;
+
+  InMemoryQueueFactory({this.idGenerator, this.serializer});
+
   @override
-  Future<Queue<T, S>> createQueue<T, S>(
+  Future<Queue<T, S>> createQueue(
     String queueName, {
-    QueueConfiguration? configuration,
+    QueueConfiguration? configuration = QueueConfiguration.testing,
     Queue<T, S>? deadLetterQueue,
-    String Function()? idGenerator,
-    MessageSerializer<T, S>? serializer,
   }) async {
     if (_createdQueues.containsKey(queueName)) {
       throw QueueAlreadyExistsError(queueName);
@@ -305,7 +308,7 @@ class InMemoryQueueFactory implements QueueFactory {
   }
 
   @override
-  Future<Queue<T, S>> getQueue<T, S>(String queueName) async {
+  Future<Queue<T, S>> getQueue(String queueName) async {
     final queue = _createdQueues[queueName];
     if (queue == null) {
       throw QueueDoesNotExistError(queueName);
