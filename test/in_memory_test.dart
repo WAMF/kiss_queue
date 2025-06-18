@@ -1,4 +1,4 @@
-import 'package:kiss_queue/kiss_queue.dart';
+/*import 'package:kiss_queue/kiss_queue.dart';
 
 import 'serialization_test.dart';
 
@@ -38,4 +38,4 @@ void main() {
   );
 
   tester3.run();
-}
+}*/

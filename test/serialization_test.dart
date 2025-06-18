@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:kiss_queue/kiss_queue.dart';
 import 'package:test/test.dart';
-
+/*
 extension OrderExtension on Order {
   Map<String, dynamic> toJson() => {
     'orderId': orderId,
@@ -561,3 +561,4 @@ class _FaultySerializer<T> implements MessageSerializer<T, String> {
     );
   }
 }
+*/

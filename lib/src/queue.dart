@@ -64,11 +64,6 @@ class QueueMessage<T> {
   int get hashCode => Object.hash(id, payload, createdAt);
 }
 
-class MessageNotFoundError extends Error {
-  final String messageId;
-  MessageNotFoundError(this.messageId);
-}
-
 /// Configuration for queue reliability and message handling behavior
 class QueueConfiguration {
   /// Maximum number of times a message can be received before being moved to dead letter queue
@@ -101,33 +96,6 @@ class QueueConfiguration {
     visibilityTimeout: Duration(milliseconds: 100),
     messageRetentionPeriod: Duration(minutes: 5),
   );
-}
-
-/// Interface for serializing and deserializing payload objects
-///
-/// `T` is the payload type
-/// `S` is the serialized format (String, Map<String, dynamic>, List<int>, etc.)
-abstract class MessageSerializer<T, S> {
-  /// Serialize payload to the specified format
-  S serialize(T payload);
-
-  /// Deserialize from the specified format back to payload object
-  T deserialize(S data);
-}
-
-/// Exception thrown when serialization fails
-class SerializationError extends Error {
-  final String message;
-  final Object? cause;
-  SerializationError(this.message, [this.cause]);
-}
-
-/// Exception thrown when deserialization fails
-class DeserializationError extends Error {
-  final String message;
-  final Object? data;
-  final Object? cause;
-  DeserializationError(this.message, this.data, [this.cause]);
 }
 
 /// Queue interface with SQS-like reliability features built-in
@@ -163,6 +131,38 @@ abstract class Queue<T, S> {
 
   /// Dispose of resources (timers, connections, etc.)
   void dispose();
+}
+
+/// Interface for serializing and deserializing payload objects
+///
+/// `T` is the payload type
+/// `S` is the serialized format (String, Map<String, dynamic>, List<int>, etc.)
+abstract class MessageSerializer<T, S> {
+  /// Serialize payload to the specified format
+  S serialize(T payload);
+
+  /// Deserialize from the specified format back to payload object
+  T deserialize(S data);
+}
+
+/// Exception thrown when serialization fails
+class SerializationError extends Error {
+  final String message;
+  final Object? cause;
+  SerializationError(this.message, [this.cause]);
+}
+
+/// Exception thrown when deserialization fails
+class DeserializationError extends Error {
+  final String message;
+  final Object? data;
+  final Object? cause;
+  DeserializationError(this.message, this.data, [this.cause]);
+}
+
+class MessageNotFoundError extends Error {
+  final String messageId;
+  MessageNotFoundError(this.messageId);
 }
 
 class QueueAlreadyExistsError extends Error {
