@@ -1,31 +1,27 @@
-import 'package:uuid/uuid.dart';
-
 class QueueMessage<T> {
-  final String id;
+  final String? id;
   final T payload;
   final DateTime createdAt;
   final DateTime? processedAt;
   final DateTime? acknowledgedAt;
 
-  static const _uuid = Uuid();
-
   QueueMessage({
-    String? id,
+    this.id,
     required this.payload,
     DateTime? createdAt,
     this.processedAt,
     this.acknowledgedAt,
-  }) : id = id ?? _uuid.v4(),
-       createdAt = createdAt ?? DateTime.now();
+  }) : createdAt = createdAt ?? DateTime.now();
 
   /// Convenience constructor for the most common use case - just provide the payload
   ///
   /// [idGenerator] - Optional function to generate custom IDs. If not provided, uses UUID v4.
-  QueueMessage.create(this.payload, {String Function()? idGenerator})
-    : id = idGenerator?.call() ?? _uuid.v4(),
-      createdAt = DateTime.now(),
-      processedAt = null,
-      acknowledgedAt = null;
+  QueueMessage.create(
+    this.payload, {
+    this.id,
+    this.processedAt,
+    this.acknowledgedAt,
+  }) : createdAt = DateTime.now();
 
   /// Constructor with explicit ID (useful for testing or when you have specific ID requirements)
   QueueMessage.withId({
@@ -117,7 +113,7 @@ abstract class Queue<T, S> {
 
   /// Enqueue a payload with auto-generated ID using the queue's configured idGenerator
   Future<void> enqueuePayload(T payload) async {
-    await enqueue(QueueMessage.create(payload, idGenerator: idGenerator));
+    await enqueue(QueueMessage.create(payload));
   }
 
   /// Dequeue a message (makes it invisible for processing)

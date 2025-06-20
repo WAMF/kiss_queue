@@ -1,0 +1,16 @@
+include: package:flutter_lints/flutter.yaml
+
+# Additional rules for the kiss_queue example app
+linter:
+  rules:
+    # Prefer single quotes for strings
+    prefer_single_quotes: true
+    
+    # Require trailing commas
+    require_trailing_commas: true
+    
+    # Prefer final for local variables
+    prefer_final_locals: true
+    
+    # Avoid print statements (use proper logging)
+    avoid_print: true 
