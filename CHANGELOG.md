@@ -1,4 +1,8 @@
 # Changelog
+## [0.2.1]
+
+- **Fix**: ensure ID is set when queued
+
 ## [0.2.0]
 
 - **Add**: add example app

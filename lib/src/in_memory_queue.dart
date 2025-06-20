@@ -62,7 +62,7 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
     } else if (message.payload is S) {
       // Store the original payload as-is
       storedMessage = QueueMessage<S>(
-        id: message.id,
+        id: id,
         payload: message.payload as S,
         createdAt: message.createdAt,
         processedAt: message.processedAt,
