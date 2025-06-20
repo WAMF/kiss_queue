@@ -274,7 +274,7 @@ class _QueueDemoScreenState extends State<QueueDemoScreen> {
 
   Future<void> _acceptMessage(QueueMessage<String> message) async {
     try {
-      await _currentQueue!.acknowledge(message.id);
+      await _currentQueue!.acknowledge(message.id!);
       setState(() {
         _pendingMessages.removeWhere((m) => m.id == message.id);
         _acceptedMessages.add(message);
@@ -291,7 +291,7 @@ class _QueueDemoScreenState extends State<QueueDemoScreen> {
     bool requeue = true,
   }) async {
     try {
-      await _currentQueue!.reject(message.id, requeue: requeue);
+      await _currentQueue!.reject(message.id!, requeue: requeue);
       setState(() {
         _pendingMessages.removeWhere((m) => m.id == message.id);
         _rejectedMessages.add(message);
@@ -703,7 +703,7 @@ class _QueueDemoScreenState extends State<QueueDemoScreen> {
                                             ).textTheme.bodyMedium,
                                           ),
                                           Text(
-                                            'ID: ${message.id.substring(0, 8)}...',
+                                            'ID: ${message.id?.substring(0, 8)}...',
                                             style: Theme.of(
                                               context,
                                             ).textTheme.bodySmall,
@@ -820,7 +820,7 @@ class _QueueDemoScreenState extends State<QueueDemoScreen> {
                                           ).textTheme.bodySmall,
                                         ),
                                         subtitle: Text(
-                                          'ID: ${message.id.substring(0, 8)}...',
+                                          'ID: ${message.id?.substring(0, 8)}...',
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodySmall
@@ -856,7 +856,7 @@ class _QueueDemoScreenState extends State<QueueDemoScreen> {
                                           ).textTheme.bodySmall,
                                         ),
                                         subtitle: Text(
-                                          'ID: ${message.id.substring(0, 8)}...',
+                                          'ID: ${message.id?.substring(0, 8)}...',
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodySmall
