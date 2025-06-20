@@ -5,9 +5,24 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "kiss_queue",
+            "name": "example",
+            "cwd": "example",
             "request": "launch",
             "type": "dart"
+        },
+        {
+            "name": "example (profile mode)",
+            "cwd": "example",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "example (release mode)",
+            "cwd": "example",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
         }
     ]
 }

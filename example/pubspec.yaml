@@ -1,0 +1,23 @@
+name: kiss_queue_example
+description: A Flutter example app demonstrating the kiss_queue interface with different implementations
+version: 1.0.0+1
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.8.0 <4.0.0'
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  kiss_queue: ^0.1.2
+  kiss_amazon_sqs_queue: ^0.0.2
+  aws_sqs_api: ^2.0.0
+  
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true 

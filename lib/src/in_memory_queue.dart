@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:collection/collection.dart';
 import 'package:kiss_queue/kiss_queue.dart';
+import 'package:uuid/uuid.dart';
 
 class InMemoryQueue<T, S> implements Queue<T, S> {
   final List<QueueMessage<S>> _queue = [];
+  final _uuid = Uuid();
 
   @override
   final QueueConfiguration configuration;
@@ -36,6 +38,7 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
 
   @override
   Future<void> enqueue(QueueMessage<T> message) async {
+    final id = message.id ?? _uuid.v4();
     // Check if message has expired (TTL)
     if (_isMessageExpired(message)) {
       return;
@@ -47,7 +50,7 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
       try {
         final serializedPayload = serializer!.serialize(message.payload);
         storedMessage = QueueMessage<S>(
-          id: message.id,
+          id: id,
           payload: serializedPayload,
           createdAt: message.createdAt,
           processedAt: message.processedAt,
@@ -73,12 +76,12 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
     }
 
     _queue.add(storedMessage);
-    _receiveCount[message.id] = 0;
+    _receiveCount[id] = 0;
   }
 
   @override
   Future<void> enqueuePayload(T payload) async {
-    await enqueue(QueueMessage.create(payload, idGenerator: idGenerator));
+    await enqueue(QueueMessage.create(payload));
   }
 
   @override
@@ -94,8 +97,8 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
       }
 
       // Increment receive count
-      _receiveCount[storedMessage.id] =
-          (_receiveCount[storedMessage.id] ?? 0) + 1;
+      _receiveCount[storedMessage.id!] =
+          (_receiveCount[storedMessage.id!] ?? 0) + 1;
 
       // Check if message should go to dead letter queue
       if (_receiveCount[storedMessage.id]! > configuration.maxReceiveCount) {
@@ -104,13 +107,13 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
         } else {
           // No dead letter queue - just remove the message permanently
           _queue.removeWhere((element) => element.id == storedMessage.id);
-          _cleanupMessageTracking(storedMessage.id);
+          _cleanupMessageTracking(storedMessage.id!);
         }
         continue; // Try to get next available message
       }
 
       // Make message invisible for visibility timeout
-      _invisibleUntil[storedMessage.id] = DateTime.now().add(
+      _invisibleUntil[storedMessage.id!] = DateTime.now().add(
         configuration.visibilityTimeout,
       );
 
@@ -227,7 +230,7 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
 
     _queue.removeWhere((storedMessage) {
       if (_isStoredMessageExpired(storedMessage)) {
-        _cleanupMessageTracking(storedMessage.id);
+        _cleanupMessageTracking(storedMessage.id!);
         return true;
       }
       return false;
@@ -236,7 +239,7 @@ class InMemoryQueue<T, S> implements Queue<T, S> {
 
   Future<void> _moveToDeadLetterQueue(QueueMessage<S> storedMessage) async {
     _queue.removeWhere((element) => element.id == storedMessage.id);
-    _cleanupMessageTracking(storedMessage.id);
+    _cleanupMessageTracking(storedMessage.id!);
 
     if (deadLetterQueue != null) {
       // Deserialize payload if needed and create processed message
