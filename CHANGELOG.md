@@ -1,4 +1,13 @@
 # Changelog
+## [0.2.1]
+
+- **Fix**: ensure ID is set when queued
+
+## [0.2.0]
+
+- **Add**: add example app
+- **Update**: Update the message imageface to allow for unset ids
+- **Remove**: remove the tests - now in the test package
 
 ## [0.1.2]
 

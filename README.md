@@ -411,6 +411,36 @@ The `kiss_queue` interface is designed for high-performance implementations:
 - ✅ Minimal overhead interface
 - ✅ Optional serialization (no overhead when T == S)
 
+## 📱 Flutter Example App
+
+We've included a complete Flutter example app that demonstrates the `kiss_queue` interface with multiple implementations:
+
+### Features
+- **Interactive Demo**: Visual interface to enqueue and dequeue messages
+- **Implementation Switching**: Dropdown to switch between queue backends
+- **Real-time Updates**: See messages being processed in real-time
+- **Error Handling**: Visual feedback for queue operations and errors
+
+### Supported Implementations
+1. **In-Memory Queue**: Built-in implementation (no additional setup)
+2. **Amazon SQS**: Production-ready AWS SQS implementation via [`kiss_amazon_sqs_queue`](https://pub.dev/packages/kiss_amazon_sqs_queue)
+
+### Quick Start
+
+```bash
+cd example
+flutter pub get
+flutter run
+```
+
+The app starts with the In-Memory Queue by default. To enable Amazon SQS:
+
+1. Uncomment SQS dependencies in `example/pubspec.yaml`
+2. Set up LocalStack or AWS credentials
+3. Uncomment SQS implementation in `example/lib/queue_implementations.dart`
+
+See the [example README](example/README.md) for detailed setup instructions and architecture overview.
+
 ## 🛠️ Installation
 
 Add to your `pubspec.yaml`:
